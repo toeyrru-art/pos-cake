@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ShoppingBag, Plus, Minus, Trash2, Calendar, Phone, User, Cake } from 'lucide-react';
+import { ShoppingBag, Plus, Minus, Trash2, Calendar, Phone, User, Cake, UploadCloud } from 'lucide-react';
 
 export default function CustomerShop() {
   const [products, setProducts] = useState([]);
@@ -8,6 +8,9 @@ export default function CustomerShop() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [slipFile, setSlipFile] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('transfer'); // 'transfer' or 'pay_later'
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -17,13 +20,30 @@ export default function CustomerShop() {
   });
 
   useEffect(() => {
-    document.title = "TT Bakery | Pre-order";
+    document.title = "Taii & Tang bakery | Pre-order";
     fetchProducts();
   }, []);
 
   const fetchProducts = async () => {
     setLoading(true);
     
+    // Fetch store status (handle error gracefully if table doesn't exist yet)
+    try {
+      const { data: settingsData } = await supabase
+        .from('store_settings')
+        .select('*')
+        .eq('key', 'is_store_open')
+        .single();
+      
+      if (settingsData && String(settingsData.value) === 'false') {
+        setIsStoreOpen(false);
+      } else {
+        setIsStoreOpen(true);
+      }
+    } catch (e) {
+      console.log('Error fetching store settings:', e);
+    }
+
     // Fetch products
     const { data: prodData } = await supabase
       .from('products')
@@ -110,6 +130,12 @@ export default function CustomerShop() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSlipFile(e.target.files[0]);
+    }
+  };
+
   const submitOrder = async (e) => {
     e.preventDefault();
     if (cart.length === 0) return alert('กรุณาเลือกสินค้าอย่างน้อย 1 ชิ้น');
@@ -119,6 +145,26 @@ export default function CustomerShop() {
 
     setSubmitting(true);
     try {
+      let slipUrl = null;
+
+      // Upload slip if provided
+      if (slipFile) {
+        const fileExt = slipFile.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError, data } = await supabase.storage
+          .from('slips')
+          .upload(fileName, slipFile);
+          
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('slips')
+          .getPublicUrl(fileName);
+          
+        slipUrl = publicUrlData.publicUrl;
+      }
+
       const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`).toISOString();
       const totalAmount = calculateTotal();
 
@@ -130,7 +176,9 @@ export default function CustomerShop() {
           customer_phone: formData.phone,
           pickup_date: pickupDateTime,
           total_amount: totalAmount,
-          status: 'pending'
+          status: 'pending',
+          slip_url: slipUrl,
+          payment_method: paymentMethod
         }])
         .select()
         .single();
@@ -150,6 +198,7 @@ export default function CustomerShop() {
 
       setOrderSuccess(true);
       setCart([]);
+      setSlipFile(null);
     } catch (error) {
       alert('เกิดข้อผิดพลาด: ' + error.message);
     } finally {
@@ -166,7 +215,7 @@ export default function CustomerShop() {
           </div>
           <h2 style={{ color: 'var(--primary-dark)', marginBottom: '1rem' }}>สั่งซื้อสำเร็จ!</h2>
           <p className="text-muted mb-4">ขอบคุณที่สั่งขนมเค้กกับเรา ทางร้านได้รับออร์เดอร์ของคุณเรียบร้อยแล้ว และจะเตรียมขนมเค้กไว้ให้ตามวันและเวลาที่คุณนัดรับครับ</p>
-          <button className="btn btn-primary" onClick={() => { setOrderSuccess(false); setFormData({name:'', phone:'', pickupDate:'', pickupTime:''}); }}>
+          <button className="btn btn-primary" onClick={() => { setOrderSuccess(false); setFormData({name:'', phone:'', pickupDate:'', pickupTime:''}); setSlipFile(null); }}>
             กลับไปหน้าแรก
           </button>
         </div>
@@ -184,16 +233,26 @@ export default function CustomerShop() {
         textAlign: 'center',
         boxShadow: 'var(--shadow-md)'
       }}>
-        <h1 style={{ fontFamily: 'var(--font-en)', fontSize: '2.5rem', marginBottom: '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>TT Bakery</h1>
+        <h1 style={{ fontFamily: 'var(--font-en)', fontSize: '2.5rem', marginBottom: '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>Taii & Tang bakery</h1>
         <p style={{ opacity: 0.9 }}>สั่งขนมเค้กล่วงหน้า อร่อย สดใหม่ ทุกวัน</p>
       </header>
 
       {/* Shop Content */}
       <main className="shop-layout" style={{ flex: 1, padding: '2rem', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         
-        {/* Product List */}
-        <div style={{ flex: '1 1 60%' }}>
-          <h2 style={{ marginBottom: '1.5rem', color: 'var(--primary-dark)' }}>เมนูขนมเค้กของเรา</h2>
+        {!isStoreOpen ? (
+          <div style={{ width: '100%', textAlign: 'center', padding: '4rem 1rem' }}>
+            <div style={{ width: '80px', height: '80px', margin: '0 auto 1.5rem', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Cake size={40} />
+            </div>
+            <h2 style={{ fontSize: '2rem', color: 'var(--primary-dark)', marginBottom: '1rem' }}>ขณะนี้ร้านปิดรับออร์เดอร์ชั่วคราว</h2>
+            <p className="text-muted" style={{ fontSize: '1.1rem' }}>ต้องขออภัยในความไม่สะดวก ทางร้านจะกลับมาเปิดรับออร์เดอร์อีกครั้งในเร็วๆ นี้ครับ</p>
+          </div>
+        ) : (
+          <>
+            {/* Product List */}
+            <div style={{ flex: '1 1 60%' }}>
+              <h2 style={{ marginBottom: '1.5rem', color: 'var(--primary-dark)' }}>เมนูขนมเค้กของเรา</h2>
           
           {loading ? (
             <p className="text-center text-muted">กำลังโหลดเมนู...</p>
@@ -311,6 +370,89 @@ export default function CustomerShop() {
                     </div>
                   </div>
 
+                  <div className="form-group" style={{ marginTop: '1.5rem' }}>
+                    <label className="form-label" style={{ fontWeight: 'bold' }}>วิธีการชำระเงิน</label>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          value="transfer" 
+                          checked={paymentMethod === 'transfer'} 
+                          onChange={(e) => setPaymentMethod(e.target.value)} 
+                        />
+                        โอนเงินตอนนี้
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          value="pay_later" 
+                          checked={paymentMethod === 'pay_later'} 
+                          onChange={(e) => setPaymentMethod(e.target.value)} 
+                        />
+                        ชำระเงินตอนรับของ (Pay Later)
+                      </label>
+                    </div>
+                  </div>
+
+                  {paymentMethod === 'transfer' && (
+                    <div style={{ 
+                      marginTop: '1.5rem', 
+                      marginBottom: '1.5rem',
+                      padding: '1.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '12px',
+                      textAlign: 'center',
+                      border: '1px solid var(--border)',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}>
+                      <h4 style={{ color: 'var(--primary-dark)', marginBottom: '0.5rem', fontSize: '1.1rem' }}>สแกนเพื่อชำระเงิน</h4>
+                      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                        พร้อมเพย์: 0899917316
+                      </p>
+                      
+                      <div style={{ 
+                        width: '200px', 
+                        height: '200px', 
+                        margin: '0 auto', 
+                        padding: '10px', 
+                        background: 'white',
+                        borderRadius: '8px',
+                        border: '2px solid var(--primary-light)' 
+                      }}>
+                        <img 
+                          src={`https://promptpay.io/0899917316/${calculateTotal()}`} 
+                          alt="PromptPay QR Code"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        />
+                      </div>
+                      <div style={{ marginTop: '0.75rem', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
+                        ยอดโอน: ฿{calculateTotal().toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentMethod === 'transfer' && (
+                    <div className="form-group" style={{ marginTop: '1rem' }}>
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <UploadCloud size={14}/> แนบสลิปโอนเงิน (ถ้ามี)
+                      </label>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleFileChange}
+                        className="form-control" 
+                        style={{ padding: '0.5rem' }}
+                      />
+                      {slipFile && (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--primary-dark)', marginTop: '0.5rem' }}>
+                          เลือกไฟล์แล้ว: {slipFile.name}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem', fontSize: '1.1rem', padding: '1rem' }} disabled={submitting}>
                     {submitting ? 'กำลังส่งข้อมูล...' : 'ยืนยันการสั่งพรีออร์เดอร์'}
                   </button>
@@ -319,6 +461,8 @@ export default function CustomerShop() {
             )}
           </div>
         </div>
+        </>
+        )}
 
       </main>
     </div>

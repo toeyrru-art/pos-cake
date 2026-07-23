@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2, Image as ImageIcon, CreditCard } from 'lucide-react';
 
 export default function Preorders() {
   const [preorders, setPreorders] = useState([]);
@@ -157,9 +157,9 @@ export default function Preorders() {
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case 'pending': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: '#fef3c7', color: '#b45309', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={14}/> รอดำเนินการ</span>;
-      case 'accepted': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--primary-light)', color: 'var(--primary-dark)', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><CheckCircle size={14}/> รับออร์เดอร์แล้ว</span>;
-      case 'completed': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: '#dcfce7', color: '#166534', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><PackageCheck size={14}/> เสร็จสิ้น</span>;
+      case 'pending': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: '#fef3c7', color: '#b45309', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={14}/> รอตรวจสอบสลิป</span>;
+      case 'accepted': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--primary-light)', color: 'var(--primary-dark)', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><CheckCircle size={14}/> กำลังอบ/ทำขนม</span>;
+      case 'completed': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: '#dcfce7', color: '#166534', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><PackageCheck size={14}/> เสร็จสิ้น/จัดส่งแล้ว</span>;
       case 'cancelled': return <span style={{ padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-full)', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><XCircle size={14}/> ยกเลิก</span>;
       default: return null;
     }
@@ -188,6 +188,10 @@ export default function Preorders() {
                   <div className="text-muted" style={{ fontSize: '0.9rem' }}>
                     เบอร์โทร: {order.customer_phone} &bull; วันรับ: {new Date(order.pickup_date).toLocaleString('th-TH')}
                   </div>
+                  <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.25rem', color: order.payment_method === 'pay_later' ? '#d97706' : 'var(--primary-dark)' }}>
+                    <CreditCard size={14} /> 
+                    {order.payment_method === 'pay_later' ? 'วิธีชำระ: จ่ายเงินตอนรับของ (Pay Later)' : 'วิธีชำระ: โอนเงิน'}
+                  </div>
                 </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -201,26 +205,43 @@ export default function Preorders() {
 
               {expandedId === order.id && (
                 <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
-                  <h4 style={{ fontSize: '1rem', marginBottom: '1rem' }}>รายการที่สั่ง:</h4>
-                  <ul style={{ listStyle: 'none', padding: 0, marginBottom: '1.5rem' }}>
-                    {order.preorder_items.map((item, idx) => (
-                      <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px dashed var(--border)' }}>
-                        <span>{item.products?.name} x <strong style={{ color: 'var(--primary-dark)' }}>{item.quantity}</strong></span>
-                        <span>฿{(item.price_at_time * item.quantity).toFixed(2)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '300px' }}>
+                      <h4 style={{ fontSize: '1rem', marginBottom: '1rem' }}>รายการที่สั่ง:</h4>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {order.preorder_items.map((item, idx) => (
+                          <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px dashed var(--border)' }}>
+                            <span>{item.products?.name} x <strong style={{ color: 'var(--primary-dark)' }}>{item.quantity}</strong></span>
+                            <span>฿{(item.price_at_time * item.quantity).toFixed(2)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {order.slip_url && (
+                      <div style={{ width: '200px' }}>
+                        <h4 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><ImageIcon size={16}/> สลิปโอนเงิน:</h4>
+                        <a href={order.slip_url} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={order.slip_url} 
+                            alt="Payment Slip" 
+                            style={{ width: '100%', height: 'auto', borderRadius: '8px', border: '1px solid var(--border)', cursor: 'pointer' }}
+                          />
+                        </a>
+                      </div>
+                    )}
+                  </div>
 
                   <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     {order.status === 'pending' && (
                       <>
-                        <button className="btn btn-primary" onClick={() => updateStatus(order.id, 'accepted')}>รับออร์เดอร์</button>
+                        <button className="btn btn-primary" onClick={() => updateStatus(order.id, 'accepted')}>รับออร์เดอร์ (เริ่มอบ)</button>
                         <button className="btn btn-outline" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }} onClick={() => updateStatus(order.id, 'cancelled')}>ยกเลิกออร์เดอร์</button>
                       </>
                     )}
                     {order.status === 'accepted' && (
                       <button className="btn" style={{ backgroundColor: 'var(--success)', color: 'white' }} onClick={() => completeOrder(order)}>
-                        ลูกค้ามารับของแล้ว (ตัดสต๊อกและรับเงิน)
+                        จัดส่งแล้ว / ลูกค้ารับของแล้ว (ตัดสต๊อกและรับเงิน)
                       </button>
                     )}
                     
