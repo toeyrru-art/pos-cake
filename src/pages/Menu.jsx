@@ -202,7 +202,7 @@ export default function Menu() {
       preorder_limit: product.preorder_limit || ''
     });
     
-    const items = product.product_ingredients.map(pi => ({
+    const items = (product.product_ingredients || []).map(pi => ({
       ingredient_id: pi.ingredient_id,
       quantity_used: pi.quantity_used
     }));
@@ -404,7 +404,11 @@ export default function Menu() {
                   </tr>
                 ) : (
                   products.map((item) => {
-                    const cost = item.suggested_price / 1.5;
+                    const suggestedPrice = item.suggested_price || 0;
+                    const sellingPrice = item.selling_price || 0;
+                    const cost = suggestedPrice / 1.5;
+                    const productIngredients = item.product_ingredients || [];
+                    
                     return (
                       <tr key={item.id}>
                         <td>
@@ -417,10 +421,10 @@ export default function Menu() {
                           )}
                         </td>
                         <td style={{ fontWeight: 500 }}>{item.name}</td>
-                        <td style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{item.selling_price.toFixed(2)}</td>
+                        <td style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{sellingPrice.toFixed(2)}</td>
                         <td>
                           ฿{cost.toFixed(2)} <br/>
-                          <span className="text-muted" style={{ fontSize: '0.75rem' }}>(แนะนำ ฿{item.suggested_price.toFixed(2)})</span>
+                          <span className="text-muted" style={{ fontSize: '0.75rem' }}>(แนะนำ ฿{suggestedPrice.toFixed(2)})</span>
                         </td>
                         <td>
                           {item.preorder_limit ? (
@@ -430,9 +434,9 @@ export default function Menu() {
                           )}
                         </td>
                         <td>
-                          {item.product_ingredients.length > 0 ? (
+                          {productIngredients.length > 0 ? (
                             <ul style={{ margin: 0, paddingLeft: '1rem', fontSize: '0.875rem' }} className="text-muted">
-                              {item.product_ingredients.map((pi, idx) => {
+                              {productIngredients.map((pi, idx) => {
                                 const ing = pi.ingredients;
                                 const recipeUnitId = ing?.recipe_unit_id || ing?.unit_id;
                                 const unitName = allUnits.find(u => u.id === recipeUnitId)?.name || '';
