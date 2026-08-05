@@ -1,25 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { Package, Cake, ShoppingCart, DollarSign, Store as StoreIcon, BarChart3, TrendingUp } from 'lucide-react';
+import { Cake, ShoppingCart, DollarSign, Store as StoreIcon, BarChart3, TrendingUp, Calendar, Settings, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
-    ingredients: 0,
     products: 0,
     salesToday: 0,
     incomeToday: 0,
-    ingredients: 0,
-    products: 0,
-    salesToday: 0,
-    incomeToday: 0,
-    lowStockIngredients: [],
     revenueData: [],
     topSellers: []
   });
   const [loading, setLoading] = useState(true);
   const [isStoreOpen, setIsStoreOpen] = useState(true);
+  const [pickupDateMode, setPickupDateMode] = useState('customer');
+  const [fixedPickupDate, setFixedPickupDate] = useState('');
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
@@ -27,9 +27,6 @@ export default function Dashboard() {
       
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-
-      // Ingredients count
-      const { count: iCount } = await supabase.from('ingredients').select('*', { count: 'exact', head: true });
       
       // Products count
       const { count: pCount } = await supabase.from('products').select('*', { count: 'exact', head: true });
@@ -100,33 +97,24 @@ export default function Dashboard() {
         const { data: settingsData } = await supabase
           .from('store_settings')
           .select('*')
-          .eq('key', 'is_store_open')
-          .single();
-        if (settingsData && String(settingsData.value) === 'false') setIsStoreOpen(false);
+          .in('key', ['is_store_open', 'pickup_date_mode', 'fixed_pickup_date']);
+          
+        if (settingsData) {
+          settingsData.forEach(setting => {
+            if (setting.key === 'is_store_open' && String(setting.value) === 'false') setIsStoreOpen(false);
+            if (setting.key === 'pickup_date_mode') setPickupDateMode(setting.value);
+            if (setting.key === 'fixed_pickup_date') setFixedPickupDate(setting.value);
+            if (setting.key === 'slack_webhook_url') setSlackWebhookUrl(setting.value);
+          });
+        }
       } catch (e) {
         console.log('Error fetching store setting');
       }
 
-      // Low Stock Ingredients
-      const { data: lowStockData } = await supabase
-        .from('ingredients')
-        .select('*, units!ingredients_unit_id_fkey(name)')
-        .lte('stock_quantity', 5); // Will be updated to compare with min_stock_level via SQL view or just filter in JS since data is small
-      
-      // Wait, we can't easily do `stock_quantity <= min_stock_level` in Supabase standard query without an RPC or View.
-      // So we will just fetch all ingredients and filter in JavaScript.
-      const { data: allIngs } = await supabase
-        .from('ingredients')
-        .select('*, units!ingredients_unit_id_fkey(name)');
-        
-      const lowStockList = (allIngs || []).filter(ing => ing.stock_quantity <= (ing.min_stock_level || 5));
-
       setStats({
-        ingredients: iCount || 0,
         products: pCount || 0,
         salesToday: salesCount,
         incomeToday: income,
-        lowStockIngredients: lowStockList,
         revenueData,
         topSellers
       });
@@ -141,14 +129,35 @@ export default function Dashboard() {
     const newVal = !isStoreOpen;
     setIsStoreOpen(newVal);
     
-    // Upsert store_settings
+    try {
+      const { error } = await supabase
+        .from('store_settings')
+        .upsert({ key: 'is_store_open', value: newVal.toString() }, { onConflict: 'key' });
+
+      if (error) {
+        setIsStoreOpen(!newVal); // revert state on error
+        alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะร้าน: ' + error.message);
+      }
+    } catch (e) {
+      console.log('Error saving store status', e);
+    }
+  };
+
+  const saveDateSettings = async () => {
+    setSavingSettings(true);
     try {
       await supabase
         .from('store_settings')
-        .upsert({ key: 'is_store_open', value: newVal.toString() });
+        .upsert([
+          { key: 'pickup_date_mode', value: pickupDateMode },
+          { key: 'fixed_pickup_date', value: fixedPickupDate },
+          { key: 'slack_webhook_url', value: slackWebhookUrl }
+        ], { onConflict: 'key' });
+      alert('บันทึกการตั้งค่าสำเร็จ');
     } catch (e) {
-      console.log('Error saving store status');
+      alert('เกิดข้อผิดพลาดในการบันทึกการตั้งค่า: ' + e.message);
     }
+    setSavingSettings(false);
   };
 
   if (loading) return <div className="text-center mt-4">กำลังโหลด...</div>;
@@ -179,8 +188,95 @@ export default function Dashboard() {
           >
             {isStoreOpen ? 'กำลังเปิด' : 'ปิดร้านอยู่'}
           </button>
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0.25rem'
+            }}
+            title="ตั้งค่าระบบ"
+          >
+            <Settings size={24} />
+          </button>
         </div>
       </div>
+
+      {isSettingsModalOpen && createPortal(
+        <div className="modal-overlay" onClick={() => setIsSettingsModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Settings size={20} /> ตั้งค่าระบบ
+              </h3>
+              <button onClick={() => setIsSettingsModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 1rem', fontSize: '1.1rem', color: 'var(--primary-dark)' }}>
+                  <Calendar size={20} /> ตั้งค่าวันนัดรับเค้ก
+                </h4>
+                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.5rem', fontWeight: 500 }}>
+                      <input type="radio" name="dateMode" value="customer" checked={pickupDateMode === 'customer'} onChange={() => setPickupDateMode('customer')} />
+                      ให้ลูกค้าเลือกวันรับเอง
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 500 }}>
+                      <input type="radio" name="dateMode" value="fixed" checked={pickupDateMode === 'fixed'} onChange={() => setPickupDateMode('fixed')} />
+                      กำหนดวันรับเค้ก (รอบส่ง)
+                    </label>
+                  </div>
+                  {pickupDateMode === 'fixed' && (
+                    <div>
+                      <input 
+                        type="date" 
+                        className="form-control premium-input" 
+                        value={fixedPickupDate} 
+                        onChange={(e) => setFixedPickupDate(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: 0 }} />
+              <div>
+                <h4 style={{ margin: '0 0 1rem', fontSize: '1.1rem', color: 'var(--primary-dark)' }}>
+                  ตั้งค่าแจ้งเตือน (Slack Webhook URL)
+                </h4>
+                <input 
+                  type="text" 
+                  className="form-control premium-input" 
+                  placeholder="วาง Slack Webhook URL ที่นี่..." 
+                  value={slackWebhookUrl} 
+                  onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={async () => {
+                    await saveDateSettings();
+                    setIsSettingsModalOpen(false);
+                  }} 
+                  disabled={savingSettings || (pickupDateMode === 'fixed' && !fixedPickupDate)}
+                >
+                  {savingSettings ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
         
@@ -210,15 +306,6 @@ export default function Dashboard() {
           <div className="text-muted" style={{ marginBottom: '0.5rem' }}>เมนูเค้กทั้งหมด</div>
           <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.products}</div>
           <Link to="/menu" className="btn btn-outline" style={{ marginTop: '1rem', width: '100%' }}>จัดการเมนู</Link>
-        </div>
-
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '2rem 1rem' }}>
-          <div style={{ padding: '1rem', backgroundColor: 'rgba(253, 224, 71, 0.2)', borderRadius: '50%', color: '#ca8a04', marginBottom: '1rem' }}>
-            <Package size={32} />
-          </div>
-          <div className="text-muted" style={{ marginBottom: '0.5rem' }}>วัตถุดิบในสต๊อก</div>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.ingredients}</div>
-          <Link to="/inventory" className="btn btn-outline" style={{ marginTop: '1rem', width: '100%' }}>จัดการสต๊อก</Link>
         </div>
 
       </div>
@@ -264,42 +351,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Low Stock Alerts */}
-      <div style={{ marginTop: '2rem' }}>
-        {stats.lowStockIngredients.length > 0 && (
-          <div className="card" style={{ borderLeft: '4px solid var(--danger)' }}>
-            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)', marginBottom: '1rem', fontWeight: 'bold' }}>
-              <Package size={20} /> แจ้งเตือนวัตถุดิบใกล้หมด!
-            </h4>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>ชื่อวัตถุดิบ</th>
-                    <th>คงเหลือ</th>
-                    <th>จุดสั่งซื้อ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.lowStockIngredients.map(ing => (
-                    <tr key={ing.id}>
-                      <td style={{ fontWeight: 500 }}>{ing.name}</td>
-                      <td style={{ color: 'var(--danger)', fontWeight: 'bold' }}>
-                        {ing.stock_quantity} {ing.units?.name}
-                      </td>
-                      <td className="text-muted">{ing.min_stock_level} {ing.units?.name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-4 text-center">
-              <Link to="/inventory" className="btn btn-outline" style={{ fontSize: '0.875rem' }}>ไปหน้าจัดการสต๊อก</Link>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

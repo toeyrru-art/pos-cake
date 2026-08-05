@@ -37,24 +37,22 @@ export default function Login() {
         textAlign: 'center'
       }}>
         <div style={{
-          width: '64px',
-          height: '64px',
-          background: 'var(--primary-light)',
+          width: '80px',
+          height: '80px',
           borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 1.5rem',
-          color: 'var(--primary-dark)'
+          overflow: 'hidden',
+          margin: '0 auto 1rem',
+          border: '3px solid var(--primary-light)',
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <Lock size={32} />
+          <img src="/logo.jpg" alt="บ้านทุ่ง เบเกอรี่ Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         
-        <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: '1.5rem' }}>
-          Welcome Back
+        <h2 style={{ margin: '0 0 0.25rem', color: 'var(--primary-dark)', fontSize: '1.5rem', fontWeight: 'bold' }}>
+          บ้านทุ่ง เบเกอรี่
         </h2>
-        <p style={{ margin: '0 0 2rem', color: 'var(--text-secondary)' }}>
-          Please enter your PIN to access the dashboard.
+        <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+          กรุณากรอก รหัส PIN 6 หลัก เพื่อเข้าสู่ระบบจัดการ
         </p>
 
         <form onSubmit={handleSubmit}>

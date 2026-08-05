@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Outlet } from 'react-router-dom';
-import { Cake, Wheat, LayoutDashboard, Store, Wallet, CalendarClock, Menu as MenuIcon, X } from 'lucide-react';
+import { Award, Cake, Wheat, LayoutDashboard, Store, Wallet, CalendarClock, Calendar as CalendarIcon, Ticket, Menu as MenuIcon, X } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import './index.css';
 
@@ -10,7 +10,10 @@ import POS from './pages/POS';
 import Transactions from './pages/Transactions';
 import Dashboard from './pages/Dashboard';
 import Preorders from './pages/Preorders';
+import BakingCalendar from './pages/BakingCalendar';
 import CustomerShop from './pages/CustomerShop';
+import Members from './pages/Members';
+import Promotions from './pages/Promotions';
 import Login from './pages/Login';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 
@@ -29,26 +32,18 @@ const AdminLayout = () => {
   };
 
   React.useEffect(() => {
-    document.title = "Taii & Tang bakery (Admin)";
     fetchPendingCount();
 
     const channel = supabase
       .channel('preorders-channel')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'preorders' },
+        { event: '*', schema: 'public', table: 'preorders' },
         (payload) => {
-          if (payload.new.status === 'pending') {
-            setPendingCount(prev => prev + 1);
+          if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
             audio.play().catch(e => console.log('Audio play failed:', e));
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'preorders' },
-        (payload) => {
           fetchPendingCount();
         }
       )
@@ -59,41 +54,55 @@ const AdminLayout = () => {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (pendingCount > 0) {
+      document.title = `(${pendingCount}) ออร์เดอร์ใหม่ - บ้านทุ่ง เบเกอรี่`;
+    } else {
+      document.title = "บ้านทุ่ง เบเกอรี่ (Admin)";
+    }
+  }, [pendingCount]);
+
+  const closeSidebar = () => setIsSidebarOpen(false);
+
   return (
     <div className="app-container">
-      {/* Sidebar */}
-      <aside className={`sidebar ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.5rem 1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Cake size={24} color="var(--primary-dark)" style={{ flexShrink: 0 }} />
-            <h1 style={{ margin: 0, fontSize: '1.2rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Taii & Tang bakery</h1>
+      {/* Backdrop overlay for mobile drawer */}
+      {isSidebarOpen && (
+        <div className="sidebar-backdrop" onClick={closeSidebar} />
+      )}
+
+      {/* Sidebar Drawer */}
+      <aside className={`sidebar ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <img src="/logo.jpg" alt="บ้านทุ่ง เบเกอรี่ Logo" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-light)', flexShrink: 0 }} />
+            <div>
+              <h1 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--primary-dark)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>บ้านทุ่ง เบเกอรี่</h1>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em' }}>BAKERY HOME MADE</div>
+            </div>
           </div>
           <button 
             type="button"
             className="sidebar-close-btn"
-            onClick={() => setIsSidebarOpen(false)}
+            onClick={closeSidebar}
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
         <nav className="sidebar-nav">
-          <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} end>
+          <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar} end>
             <LayoutDashboard size={20} />
             <span>แดชบอร์ด</span>
           </NavLink>
-          <NavLink to="/pos" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/pos" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
             <Store size={20} />
             <span>บันทึกออร์เดอร์</span>
           </NavLink>
-          <NavLink to="/menu" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/menu" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
             <Cake size={20} />
             <span>เมนูเค้ก</span>
           </NavLink>
-          <NavLink to="/inventory" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Wheat size={20} />
-            <span>สต๊อกวัตถุดิบ</span>
-          </NavLink>
-          <NavLink to="/preorders" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <NavLink to="/preorders" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <CalendarClock size={20} />
               <span>ออร์เดอร์ล่วงหน้า</span>
@@ -113,39 +122,49 @@ const AdminLayout = () => {
               </div>
             )}
           </NavLink>
-          <NavLink to="/transactions" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
+            <CalendarIcon size={20} />
+            <span>ปฏิทินวางแผนทำเค้ก</span>
+          </NavLink>
+          <NavLink to="/transactions" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
             <Wallet size={20} />
             <span>บัญชี/รายรับรายจ่าย</span>
+          </NavLink>
+          <NavLink to="/members" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
+            <Award size={20} />
+            <span>ระบบสมาชิก/แต้ม</span>
+          </NavLink>
+          <NavLink to="/promotions" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
+            <Ticket size={20} />
+            <span>โค้ดส่วนลด/บรอดแคสต์</span>
           </NavLink>
         </nav>
       </aside>
 
       {/* Main Content */}
       <main className="main-content">
-        <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {!isSidebarOpen && (
-            <button 
-              className="btn btn-outline" 
-              style={{ padding: '0.5rem', border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', borderRadius: '50%' }}
-              onClick={() => setIsSidebarOpen(true)}
-            >
-              <MenuIcon size={20} />
-            </button>
-          )}
-          <h2 style={{ flex: 1, margin: 0 }}>ระบบจัดการร้านขายขนมเค้ก</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span className="text-muted" style={{ fontWeight: 500 }}>🍰 ผู้ดูแลระบบ</span>
+        <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button 
+            className="mobile-menu-btn btn btn-outline" 
+            style={{ padding: '0.4rem', border: 'none', background: 'var(--primary-light)', color: 'var(--primary-dark)', borderRadius: '50%', cursor: 'pointer' }}
+            onClick={() => setIsSidebarOpen(true)}
+            aria-label="Open Menu"
+          >
+            <MenuIcon size={22} />
+          </button>
+          <h2 style={{ flex: 1, margin: 0, fontSize: '1.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>บ้านทุ่ง เบเกอรี่ (Bakery & Cafe)</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <button 
               onClick={logout}
               style={{
                 background: 'transparent',
                 border: '1px solid #ff4757',
                 color: '#ff4757',
-                padding: '0.25rem 0.75rem',
+                padding: '0.3rem 0.75rem',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: 600,
-                fontSize: '0.875rem'
+                fontSize: '0.85rem'
               }}
             >
               ออกระบบ
@@ -186,8 +205,11 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="pos" element={<POS />} />
             <Route path="menu" element={<Menu />} />
+            <Route path="members" element={<Members />} />
+            <Route path="promotions" element={<Promotions />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="preorders" element={<Preorders />} />
+            <Route path="calendar" element={<BakingCalendar />} />
             <Route path="transactions" element={<Transactions />} />
           </Route>
         </Routes>

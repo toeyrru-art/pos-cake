@@ -4,7 +4,6 @@ import { ShoppingCart, Plus, Minus, Trash2 } from 'lucide-react';
 
 export default function POS() {
   const [products, setProducts] = useState([]);
-  const [ingredients, setIngredients] = useState([]);
   const [cart, setCart] = useState([]); // [{ product, quantity }]
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -15,26 +14,11 @@ export default function POS() {
 
   const fetchData = async () => {
     setLoading(true);
-    
-    // Fetch products with recipes
     const { data: prodData } = await supabase
       .from('products')
-      .select(`
-        *,
-        product_ingredients (
-          ingredient_id,
-          quantity_used
-        )
-      `)
+      .select('*')
       .order('name');
     if (prodData) setProducts(prodData);
-
-    // Fetch ingredients to check stock
-    const { data: ingData } = await supabase
-      .from('ingredients')
-      .select('*');
-    if (ingData) setIngredients(ingData);
-
     setLoading(false);
   };
 
@@ -71,39 +55,12 @@ export default function POS() {
 
   const processSale = async () => {
     if (cart.length === 0) return;
-    
-    // 1. Verify Stock
-    let stockErrors = [];
-    const ingredientUsage = {};
-    
-    cart.forEach(cartItem => {
-      cartItem.product.product_ingredients.forEach(pi => {
-        const totalUsedInRecipeUnit = pi.quantity_used * cartItem.quantity;
-        const ing = ingredients.find(i => i.id === pi.ingredient_id);
-        const factor = ing?.conversion_factor || 1;
-        const totalUsedInStorageUnit = totalUsedInRecipeUnit / factor;
-        
-        ingredientUsage[pi.ingredient_id] = (ingredientUsage[pi.ingredient_id] || 0) + totalUsedInStorageUnit;
-      });
-    });
-
-    for (const [ingId, used] of Object.entries(ingredientUsage)) {
-      const ing = ingredients.find(i => i.id === ingId);
-      if (ing && ing.stock_quantity < used) {
-        stockErrors.push(`วัตถุดิบ ${ing.name} ไม่พอ (ต้องการตัดสต๊อก: ${used.toFixed(2)}, มี: ${ing.stock_quantity})`);
-      }
-    }
-
-    if (stockErrors.length > 0) {
-      alert("ไม่สามารถขายได้ สต๊อกวัตถุดิบไม่เพียงพอ:\n- " + stockErrors.join("\n- "));
-      return;
-    }
 
     setProcessing(true);
     try {
       const totalAmount = calculateTotal();
 
-      // 2. Create Sale Record
+      // 1. Create Sale Record
       const { data: saleData, error: saleError } = await supabase
         .from('sales')
         .insert([{ total_amount: totalAmount }])
@@ -113,7 +70,7 @@ export default function POS() {
       if (saleError) throw saleError;
       const saleId = saleData.id;
 
-      // 3. Create Sale Items
+      // 2. Create Sale Items
       const saleItemsData = cart.map(item => ({
         sale_id: saleId,
         product_id: item.product.id,
@@ -122,16 +79,7 @@ export default function POS() {
       }));
       await supabase.from('sale_items').insert(saleItemsData);
 
-      // 4. Update Ingredients Stock
-      for (const [ingId, used] of Object.entries(ingredientUsage)) {
-        const ing = ingredients.find(i => i.id === ingId);
-        await supabase
-          .from('ingredients')
-          .update({ stock_quantity: ing.stock_quantity - used })
-          .eq('id', ingId);
-      }
-
-      // 5. Record Transaction (Income)
+      // 3. Record Transaction (Income)
       await supabase.from('transactions').insert([{
         type: 'income',
         amount: totalAmount,
@@ -141,7 +89,7 @@ export default function POS() {
 
       alert('ทำรายการขายสำเร็จ!');
       setCart([]);
-      fetchData(); // refresh stock
+      fetchData();
 
     } catch (error) {
       alert('เกิดข้อผิดพลาด: ' + error.message);
@@ -151,111 +99,106 @@ export default function POS() {
   };
 
   return (
-    <div>
-      <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>ขายสินค้า (POS)</h3>
-
-      <div className="flex gap-4 pos-layout" style={{ alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      {/* Product Selection */}
+      <div style={{ flex: '1 1 60%', minWidth: '320px' }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>รายการสินค้า</h3>
         
-        {/* Product Grid */}
-        <div style={{ flex: '2' }}>
-          <div className="card">
-            <h4 style={{ marginBottom: '1rem', fontWeight: 'bold' }}>เมนูเค้ก</h4>
-            {loading ? (
-              <p className="text-center text-muted">กำลังโหลด...</p>
-            ) : products.length === 0 ? (
-              <p className="text-center text-muted">ไม่มีเมนูเค้ก กรุณาไปเพิ่มที่จัดการเมนู</p>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-                {products.map(p => (
-                  <div 
-                    key={p.id} 
-                    style={{ 
-                      border: '1px solid var(--border)', 
-                      borderRadius: 'var(--radius-md)', 
-                      padding: '1rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      textAlign: 'center',
-                      backgroundColor: 'var(--primary-light)'
-                    }}
-                    onClick={() => addToCart(p)}
-                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--primary-dark)'}
-                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
-                  >
-                    {p.image_url ? (
-                      <div style={{ width: '100%', height: '120px', marginBottom: '0.75rem', borderRadius: '8px', overflow: 'hidden' }}>
-                        <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                    ) : (
-                      <div style={{ width: '100%', height: '120px', marginBottom: '0.75rem', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-dark)' }}>
-                        <span style={{ fontSize: '2rem' }}>🍰</span>
-                      </div>
-                    )}
-                    <div style={{ fontWeight: 500, marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                    <div style={{ color: 'var(--primary-dark)', fontWeight: 'bold', fontSize: '1.125rem' }}>
-                      ฿{p.selling_price.toFixed(2)}
-                    </div>
+        {loading ? (
+          <p className="text-center text-muted">กำลังโหลด...</p>
+        ) : products.length === 0 ? (
+          <div className="card text-center text-muted">ยังไม่มีรายการสินค้า</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+            {products.map(product => (
+              <div 
+                key={product.id} 
+                className="card" 
+                style={{ 
+                  cursor: 'pointer',
+                  transition: 'transform 0.1s, box-shadow 0.1s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justify: 'space-between',
+                  height: '100%'
+                }}
+                onClick={() => addToCart(product)}
+              >
+                {product.image_url ? (
+                  <img 
+                    src={product.image_url} 
+                    alt={product.name} 
+                    style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', marginBottom: '0.75rem' }} 
+                  />
+                ) : (
+                  <div style={{ width: '100%', height: '120px', borderRadius: '8px', backgroundColor: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-dark)', fontSize: '2rem', marginBottom: '0.75rem' }}>
+                    🍰
                   </div>
-                ))}
+                )}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem' }}>{product.name}</div>
+                  <div style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{product.selling_price.toFixed(2)}</div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Cart */}
-        <div style={{ flex: '1', minWidth: '300px' }}>
-          <div className="card" style={{ position: 'sticky', top: '100px' }}>
-            <h4 style={{ marginBottom: '1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <ShoppingCart size={20} /> รายการสั่งซื้อ
-            </h4>
-            
-            {cart.length === 0 ? (
-              <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                ยังไม่ได้เลือกสินค้า
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+      {/* Cart Section */}
+      <div style={{ flex: '1 1 35%', minWidth: '300px' }}>
+        <div className="card" style={{ position: 'sticky', top: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+            <ShoppingCart size={20} color="var(--primary-dark)" />
+            <h4 style={{ margin: 0, fontWeight: 'bold' }}>ตะกร้าสินค้า</h4>
+          </div>
+
+          {cart.length === 0 ? (
+            <p className="text-center text-muted" style={{ padding: '2rem 0' }}>ยังไม่มีสินค้าในตะกร้า</p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', maxHeight: '350px', overflowY: 'auto' }}>
                 {cart.map(item => (
-                  <div key={item.product.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                  <div key={item.product.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--primary-light)', padding: '0.75rem', borderRadius: '8px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 500 }}>{item.product.name}</div>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                        ฿{item.product.selling_price.toFixed(2)} / ชิ้น
-                      </div>
+                      <div className="text-muted" style={{ fontSize: '0.85rem' }}>฿{item.product.selling_price.toFixed(2)}</div>
                     </div>
+
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <button className="btn btn-outline" style={{ padding: '0.2rem' }} onClick={() => updateQuantity(item.product.id, -1)}>
+                      <button className="btn btn-outline" style={{ padding: '0.2rem', borderRadius: '4px', background: 'white' }} onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, -1); }}>
                         <Minus size={14} />
                       </button>
-                      <span style={{ width: '20px', textAlign: 'center' }}>{item.quantity}</span>
-                      <button className="btn btn-outline" style={{ padding: '0.2rem' }} onClick={() => updateQuantity(item.product.id, 1)}>
+                      <span style={{ fontWeight: 'bold', minWidth: '20px', textAlign: 'center' }}>{item.quantity}</span>
+                      <button className="btn btn-outline" style={{ padding: '0.2rem', borderRadius: '4px', background: 'white' }} onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, 1); }}>
                         <Plus size={14} />
                       </button>
-                      <button className="btn btn-outline" style={{ padding: '0.2rem', color: 'var(--danger)', borderColor: 'transparent', marginLeft: '0.5rem' }} onClick={() => removeFromCart(item.product.id)}>
+                      <button className="btn btn-outline" style={{ padding: '0.2rem', borderRadius: '4px', color: 'var(--danger)', borderColor: 'transparent' }} onClick={(e) => { e.stopPropagation(); removeFromCart(item.product.id); }}>
                         <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
                 ))}
-                
-                <div style={{ borderTop: '2px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.25rem' }}>
-                  <span>ยอดรวม</span>
+              </div>
+
+              <div style={{ borderTop: '2px dashed var(--border)', paddingTop: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', fontWeight: 'bold' }}>
+                  <span>ราคารวมทั้งสิ้น</span>
                   <span style={{ color: 'var(--primary-dark)' }}>฿{calculateTotal().toFixed(2)}</span>
                 </div>
-                
-                <button 
-                  className="btn btn-primary" 
-                  style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', marginTop: '1rem' }}
-                  onClick={processSale}
-                  disabled={processing}
-                >
-                  {processing ? 'กำลังประมวลผล...' : 'ชำระเงิน (ตัดสต๊อกอัตโนมัติ)'}
-                </button>
               </div>
-            )}
-          </div>
-        </div>
 
+              <button 
+                className="btn btn-primary" 
+                style={{ width: '100%', padding: '0.875rem', fontSize: '1.1rem' }}
+                onClick={processSale}
+                disabled={processing}
+              >
+                {processing ? 'กำลังทำรายการ...' : 'ชำระเงิน / ยืนยันการขาย'}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

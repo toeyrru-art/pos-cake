@@ -1,28 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Trash2, Edit2, Save, X, Calculator, UploadCloud, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Loader2, Cake, CheckCircle2, XCircle } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 export default function Menu() {
   const [products, setProducts] = useState([]);
-  const [ingredients, setIngredients] = useState([]);
-  const [allUnits, setAllUnits] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Recipe builder states
   const [formData, setFormData] = useState({
     name: '',
     selling_price: '',
     image_url: '',
-    preorder_limit: ''
+    preorder_limit: '',
+    is_active: true,
+    flavors: ''
   });
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
-  
-  const [recipeItems, setRecipeItems] = useState([]); // [{ ingredient_id, quantity_used, cost }]
-  const [suggestedPrice, setSuggestedPrice] = useState(0);
-  
+
   const [editingId, setEditingId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -32,74 +28,42 @@ export default function Menu() {
 
   const fetchData = async () => {
     setLoading(true);
-    
-    // Fetch all units
-    const { data: unitsData } = await supabase.from('units').select('*');
-    if (unitsData) setAllUnits(unitsData);
-
-    // Fetch ingredients for recipe builder
-    const { data: ingData } = await supabase
-      .from('ingredients')
-      .select('*')
-      .order('name');
-    
-    if (ingData) setIngredients(ingData);
-
-    // Fetch products with their recipe
     const { data: prodData } = await supabase
       .from('products')
-      .select(`
-        *,
-        product_ingredients (
-          ingredient_id,
-          quantity_used,
-          ingredients ( name, cost_per_unit, conversion_factor, recipe_unit_id, unit_id )
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (prodData) setProducts(prodData);
-    
     setLoading(false);
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
-  const addRecipeItem = () => {
-    if (ingredients.length > 0) {
-      setRecipeItems([...recipeItems, { ingredient_id: ingredients[0].id, quantity_used: 1 }]);
-    }
-  };
+  const toggleProductActive = async (id, currentStatus) => {
+    const nextStatus = currentStatus === false ? true : false;
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: nextStatus })
+        .eq('id', id);
 
-  const updateRecipeItem = (index, field, value) => {
-    const newItems = [...recipeItems];
-    newItems[index][field] = value;
-    setRecipeItems(newItems);
-    calculateSuggestedPrice(newItems);
-  };
-
-  const removeRecipeItem = (index) => {
-    const newItems = recipeItems.filter((_, i) => i !== index);
-    setRecipeItems(newItems);
-    calculateSuggestedPrice(newItems);
-  };
-
-  const calculateSuggestedPrice = (items) => {
-    let cost = 0;
-    items.forEach(item => {
-      const ing = ingredients.find(i => i.id === item.ingredient_id);
-      if (ing) {
-        const factor = ing.conversion_factor || 1;
-        const costPerRecipeUnit = ing.cost_per_unit / factor;
-        cost += (costPerRecipeUnit * parseFloat(item.quantity_used || 0));
+      if (error) {
+        if (error.message.includes('is_active')) {
+          alert('กรุณารันคำสั่ง SQL ใน Supabase เพิ่มคอลัมน์ is_active ก่อนนะครับ:\n\nALTER TABLE products ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;');
+          return;
+        }
+        throw error;
       }
-    });
-    // Suggest 50% margin
-    const suggested = cost * 1.5;
-    setSuggestedPrice(suggested);
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, is_active: nextStatus } : p));
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ: ' + e.message);
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -109,12 +73,11 @@ export default function Menu() {
     try {
       setUploading(true);
 
-      // 1. Compress Image
       const options = {
-        maxSizeMB: 0.2, // Max 200KB
-        maxWidthOrHeight: 800, // Max 800px width/height
+        maxSizeMB: 0.2,
+        maxWidthOrHeight: 800,
         useWebWorker: true,
-        fileType: 'image/webp' // Convert to WEBP for better compression
+        fileType: 'image/webp'
       };
       
       const compressedFile = await imageCompression(file, options);
@@ -122,14 +85,12 @@ export default function Menu() {
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // 2. Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('cake-images')
         .upload(filePath, compressedFile);
 
       if (uploadError) throw uploadError;
 
-      // 3. Get Public URL
       const { data: { publicUrl } } = supabase.storage
         .from('cake-images')
         .getPublicUrl(filePath);
@@ -140,7 +101,6 @@ export default function Menu() {
       alert('เกิดข้อผิดพลาดในการอัปโหลด: ' + error.message);
     } finally {
       setUploading(false);
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -155,34 +115,39 @@ export default function Menu() {
     const payload = {
       name: formData.name,
       selling_price: parseFloat(formData.selling_price),
-      suggested_price: suggestedPrice,
       image_url: formData.image_url,
-      preorder_limit: formData.preorder_limit ? parseInt(formData.preorder_limit, 10) : null
+      preorder_limit: formData.preorder_limit ? parseInt(formData.preorder_limit, 10) : null,
+      is_active: formData.is_active,
+      flavors: formData.flavors
     };
 
     try {
-      let productId = editingId;
-
       if (editingId) {
-        // Update product
-        await supabase.from('products').update(payload).eq('id', editingId);
-        // Delete old recipe
-        await supabase.from('product_ingredients').delete().eq('product_id', editingId);
+        let { error } = await supabase.from('products').update(payload).eq('id', editingId);
+        if (error) {
+          if (error.message.includes('flavors')) {
+            alert('กรุณารันคำสั่ง SQL เพิ่มคอลัมน์ flavors ใน Supabase ก่อนนะครับ:\n\nALTER TABLE products ADD COLUMN IF NOT EXISTS flavors text;');
+            delete payload.flavors;
+          }
+          if (error.message.includes('is_active')) {
+            delete payload.is_active;
+          }
+          const retry = await supabase.from('products').update(payload).eq('id', editingId);
+          if (retry.error) throw retry.error;
+        }
       } else {
-        // Insert product
-        const { data, error } = await supabase.from('products').insert([payload]).select().single();
-        if (error) throw error;
-        productId = data.id;
-      }
-
-      // Insert new recipe
-      if (recipeItems.length > 0) {
-        const recipePayload = recipeItems.map(item => ({
-          product_id: productId,
-          ingredient_id: item.ingredient_id,
-          quantity_used: parseFloat(item.quantity_used)
-        }));
-        await supabase.from('product_ingredients').insert(recipePayload);
+        let { error } = await supabase.from('products').insert([payload]);
+        if (error) {
+          if (error.message.includes('flavors')) {
+            alert('กรุณารันคำสั่ง SQL เพิ่มคอลัมน์ flavors ใน Supabase ก่อนนะครับ:\n\nALTER TABLE products ADD COLUMN IF NOT EXISTS flavors text;');
+            delete payload.flavors;
+          }
+          if (error.message.includes('is_active')) {
+            delete payload.is_active;
+          }
+          const retry = await supabase.from('products').insert([payload]);
+          if (retry.error) throw retry.error;
+        }
       }
 
       resetForm();
@@ -199,16 +164,10 @@ export default function Menu() {
       name: product.name,
       selling_price: product.selling_price,
       image_url: product.image_url || '',
-      preorder_limit: product.preorder_limit || ''
+      preorder_limit: product.preorder_limit || '',
+      is_active: product.is_active !== false,
+      flavors: product.flavors || ''
     });
-    
-    const items = (product.product_ingredients || []).map(pi => ({
-      ingredient_id: pi.ingredient_id,
-      quantity_used: pi.quantity_used
-    }));
-    
-    setRecipeItems(items);
-    calculateSuggestedPrice(items);
     setIsModalOpen(true);
   };
 
@@ -221,9 +180,7 @@ export default function Menu() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', selling_price: '', image_url: '', preorder_limit: '' });
-    setRecipeItems([]);
-    setSuggestedPrice(0);
+    setFormData({ name: '', selling_price: '', image_url: '', preorder_limit: '', is_active: true, flavors: '' });
     setEditingId(null);
   };
 
@@ -238,7 +195,7 @@ export default function Menu() {
 
       {isModalOpen && createPortal(
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 {editingId ? <Edit2 size={24} /> : <Plus size={24} />}
@@ -250,23 +207,79 @@ export default function Menu() {
             </div>
             
             <form onSubmit={saveProduct}>
-              <div className="flex flex-wrap gap-4 mb-4">
-                <div className="form-group" style={{ flex: '2 1 300px' }}>
+              <div className="flex flex-col gap-4 mb-4">
+                <div className="form-group">
                   <label className="form-label">ชื่อเมนูเค้ก</label>
-                  <input type="text" name="name" value={formData.name} onChange={handleInputChange} className="form-control premium-input" placeholder="เช่น เค้กช็อกโกแลตหน้านิ่ม" />
+                  <input 
+                    type="text" 
+                    name="name" 
+                    value={formData.name} 
+                    onChange={handleInputChange} 
+                    className="form-control premium-input" 
+                    placeholder="เช่น เค้กหน้านิ่ม" 
+                    required
+                  />
                 </div>
-                <div className="form-group" style={{ flex: '1 1 150px' }}>
+
+                <div className="form-group">
+                  <label className="form-label">รสชาติ / หน้าเค้ก (แยกด้วยจุลภาค ,)</label>
+                  <input 
+                    type="text" 
+                    name="flavors" 
+                    value={formData.flavors || ''} 
+                    onChange={handleInputChange} 
+                    className="form-control premium-input" 
+                    placeholder="เช่น ช็อกโกแลต, สตรอว์เบอร์รี่, มะพร้าวอ่อน, ส้ม" 
+                  />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+                    เว้นว่างไว้หากไม่มีตัวเลือก ให้ลูกค้าเลือกได้ในหน้าสั่งซื้อ
+                  </small>
+                </div>
+                
+                <div className="form-group">
                   <label className="form-label">ราคาขาย (บาท)</label>
-                  <input type="number" step="0.01" name="selling_price" value={formData.selling_price} onChange={handleInputChange} className="form-control premium-input" placeholder="0.00" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    name="selling_price" 
+                    value={formData.selling_price} 
+                    onChange={handleInputChange} 
+                    className="form-control premium-input" 
+                    placeholder="0.00" 
+                    required
+                  />
                 </div>
-                <div className="form-group" style={{ flex: '1 1 150px' }}>
+                
+                <div className="form-group">
                   <label className="form-label">จำกัดพรีออร์เดอร์ (ชิ้น)</label>
-                  <input type="number" min="1" step="1" name="preorder_limit" value={formData.preorder_limit || ''} onChange={handleInputChange} className="form-control premium-input" placeholder="เว้นว่าง = ไม่อั้น" />
+                  <input 
+                    type="number" 
+                    min="1" 
+                    step="1" 
+                    name="preorder_limit" 
+                    value={formData.preorder_limit || ''} 
+                    onChange={handleInputChange} 
+                    className="form-control premium-input" 
+                    placeholder="เว้นว่าง = ไม่อั้น" 
+                  />
                 </div>
-                <div className="form-group" style={{ flex: '2 1 300px' }}>
-                  <label className="form-label">รูปภาพเค้ก (อัปโหลดจากเครื่อง)</label>
-                  
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 500 }}>
+                    <input 
+                      type="checkbox" 
+                      name="is_active" 
+                      checked={formData.is_active} 
+                      onChange={handleInputChange} 
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
+                    />
+                    เปิดรับพรีออร์เดอร์เมนูนี้ในหน้าร้าน
+                  </label>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">รูปภาพเค้ก</label>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
                       <input 
                         type="file" 
@@ -277,12 +290,20 @@ export default function Menu() {
                         disabled={uploading}
                         style={{ padding: '0.5rem' }}
                       />
-                      {uploading && <p className="text-muted mt-2" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Loader2 size={14} className="animate-spin" /> กำลังอัปโหลด...</p>}
+                      {uploading && (
+                        <p className="text-muted mt-2" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Loader2 size={14} className="animate-spin" /> กำลังอัปโหลด...
+                        </p>
+                      )}
                     </div>
                     
                     {formData.image_url && (
                       <div style={{ position: 'relative' }}>
-                        <img src={formData.image_url} alt="Preview" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '12px', border: '2px solid var(--primary-light)' }} />
+                        <img 
+                          src={formData.image_url} 
+                          alt="Preview" 
+                          style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '12px', border: '2px solid var(--primary-light)' }} 
+                        />
                         <button 
                           type="button" 
                           onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
@@ -293,78 +314,6 @@ export default function Menu() {
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
-
-              <div className="recipe-section">
-                <div className="flex justify-between items-center mb-4 pb-2" style={{ borderBottom: '2px dashed rgba(255, 143, 179, 0.3)' }}>
-                  <label className="form-label mb-0" style={{ fontSize: '1.1rem', color: 'var(--primary-dark)' }}>สูตรวัตถุดิบที่ใช้ (Recipe)</label>
-                  <button type="button" className="btn btn-outline" onClick={addRecipeItem} style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', borderRadius: 'var(--radius-md)' }}>
-                    <Plus size={14} /> เพิ่มวัตถุดิบ
-                  </button>
-                </div>
-                
-                {recipeItems.length === 0 ? (
-                  <div className="text-center p-4" style={{ background: 'rgba(255,255,255,0.8)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)' }}>
-                    <p className="text-muted m-0">ยังไม่ได้เพิ่มวัตถุดิบในสูตร</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {recipeItems.map((item, index) => (
-                      <div key={index} className="flex gap-2 items-center p-2" style={{ background: '#fff', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                        <select 
-                          className="form-control premium-input" 
-                          value={item.ingredient_id} 
-                          onChange={(e) => updateRecipeItem(index, 'ingredient_id', e.target.value)}
-                          style={{ flex: 2, border: 'none', boxShadow: 'none' }}
-                        >
-                          {ingredients.map(ing => {
-                            const factor = ing.conversion_factor || 1;
-                            const costPerRecipeUnit = ing.cost_per_unit / factor;
-                            const recipeUnitId = ing.recipe_unit_id || ing.unit_id;
-                            const recipeUnitName = allUnits.find(u => u.id === recipeUnitId)?.name || '';
-                            return (
-                              <option key={ing.id} value={ing.id}>
-                                {ing.name} (ต้นทุน: ฿{costPerRecipeUnit.toFixed(4)}/{recipeUnitName})
-                              </option>
-                            );
-                          })}
-                        </select>
-                        
-                        <div style={{ width: '1px', height: '30px', background: 'var(--border)' }}></div>
-
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          className="form-control premium-input" 
-                          placeholder="จำนวนที่ใช้" 
-                          value={item.quantity_used}
-                          onChange={(e) => updateRecipeItem(index, 'quantity_used', e.target.value)}
-                          style={{ flex: 1, border: 'none', boxShadow: 'none', textAlign: 'center' }}
-                        />
-                        
-                        <span style={{ minWidth: '50px', fontSize: '0.875rem', fontWeight: '500' }} className="text-muted">
-                          {(() => {
-                            const ing = ingredients.find(i => i.id === item.ingredient_id);
-                            if (!ing) return '';
-                            const recipeUnitId = ing.recipe_unit_id || ing.unit_id;
-                            return allUnits.find(u => u.id === recipeUnitId)?.name || '';
-                          })()}
-                        </span>
-
-                        <button type="button" onClick={() => removeRecipeItem(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '0.5rem', display: 'flex', alignItems: 'center' }}>
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                <div className="mt-4 pt-3 text-right">
-                  <p style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem', fontWeight: 'bold', fontSize: '1.1rem', background: 'var(--primary-light)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)' }}>
-                    <Calculator size={18} color="var(--primary-dark)"/> 
-                    ต้นทุนรวม: <span style={{ color: 'var(--primary-dark)' }}>฿{(suggestedPrice / 1.5).toFixed(2)}</span>
-                  </p>
                 </div>
               </div>
 
@@ -390,10 +339,10 @@ export default function Menu() {
                 <tr>
                   <th>รูปภาพ</th>
                   <th>ชื่อเมนู</th>
+                  <th>รสชาติ/หน้าเค้ก</th>
                   <th>ราคาขาย</th>
-                  <th>ต้นทุน/ราคาแนะนำ</th>
-                  <th>จำกัดรับออร์เดอร์</th>
-                  <th>สูตรวัตถุดิบ</th>
+                  <th>จำกัดพรีออร์เดอร์</th>
+                  <th>สถานะพรีออร์เดอร์</th>
                   <th>จัดการ</th>
                 </tr>
               </thead>
@@ -404,11 +353,9 @@ export default function Menu() {
                   </tr>
                 ) : (
                   products.map((item) => {
-                    const suggestedPrice = item.suggested_price || 0;
-                    const sellingPrice = item.selling_price || 0;
-                    const cost = suggestedPrice / 1.5;
-                    const productIngredients = item.product_ingredients || [];
-                    
+                    const sellingPrice = Number(item.selling_price) || 0;
+                    const isActive = item.is_active !== false;
+
                     return (
                       <tr key={item.id}>
                         <td>
@@ -421,11 +368,20 @@ export default function Menu() {
                           )}
                         </td>
                         <td style={{ fontWeight: 500 }}>{item.name}</td>
-                        <td style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{sellingPrice.toFixed(2)}</td>
                         <td>
-                          ฿{cost.toFixed(2)} <br/>
-                          <span className="text-muted" style={{ fontSize: '0.75rem' }}>(แนะนำ ฿{suggestedPrice.toFixed(2)})</span>
+                          {item.flavors ? (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                              {item.flavors.split(',').map((f, idx) => (
+                                <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'var(--primary-light)', color: 'var(--primary-dark)', padding: '0.2rem 0.5rem', borderRadius: '12px', fontWeight: 500 }}>
+                                  {f.trim()}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted" style={{ fontSize: '0.85rem' }}>-</span>
+                          )}
                         </td>
+                        <td style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{sellingPrice.toFixed(2)}</td>
                         <td>
                           {item.preorder_limit ? (
                             <span style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>{item.preorder_limit} ชิ้น</span>
@@ -434,20 +390,29 @@ export default function Menu() {
                           )}
                         </td>
                         <td>
-                          {productIngredients.length > 0 ? (
-                            <ul style={{ margin: 0, paddingLeft: '1rem', fontSize: '0.875rem' }} className="text-muted">
-                              {productIngredients.map((pi, idx) => {
-                                const ing = pi.ingredients;
-                                const recipeUnitId = ing?.recipe_unit_id || ing?.unit_id;
-                                const unitName = allUnits.find(u => u.id === recipeUnitId)?.name || '';
-                                return (
-                                  <li key={idx}>{ing?.name}: {pi.quantity_used} {unitName}</li>
-                                );
-                              })}
-                            </ul>
-                          ) : (
-                            <span className="text-muted">- ไม่มีสูตร -</span>
-                          )}
+                          <button
+                            onClick={() => toggleProductActive(item.id, item.is_active)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '20px',
+                              border: 'none',
+                              fontSize: '0.85rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              backgroundColor: isActive ? 'rgba(52, 211, 153, 0.15)' : 'rgba(251, 113, 133, 0.15)',
+                              color: isActive ? '#059669' : '#e11d48',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {isActive ? (
+                              <><CheckCircle2 size={16} /> เปิดรับพรี</>
+                            ) : (
+                              <><XCircle size={16} /> ปิดรับพรี</>
+                            )}
+                          </button>
                         </td>
                         <td>
                           <div className="flex gap-2">

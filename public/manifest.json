@@ -1,0 +1,15 @@
+{
+  "short_name": "บ้านทุ่งเบเกอรี่",
+  "name": "บ้านทุ่ง เบเกอรี่ BAKERY HOME MADE",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FAF6F0",
+  "theme_color": "#8B5E3C",
+  "display": "standalone"
+}

@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+
 const supabaseUrl = 'https://sxyiqsakqmxtjebwplff.supabase.co';
 const supabaseKey = 'sb_publishable_6gkLIHtfTwl8j_CSgfq8Rg_0wD4AnAu';
-const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function run() {
-  const { data, error } = await supabase.from('store_settings').select('*');
-  console.log(data);
-}
-run();
+// Need service role key or we can just read using anon key if RLS allows.
+// Wait, we don't have service role key. Let's find anon key in .env
