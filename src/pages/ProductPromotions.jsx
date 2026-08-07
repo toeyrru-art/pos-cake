@@ -80,8 +80,8 @@ export default function ProductPromotions() {
       fetchPromotions();
       alert('บันทึกโปรโมชั่นสำเร็จ!');
     } catch (err) {
-      if (err.message.includes('product_promotions') || err.code === '42P01') {
-        alert('กรุณารัน SQL ใน Supabase เพื่อสร้างตารางก่อนนะครับ:\n\nCREATE TABLE IF NOT EXISTS product_promotions (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  name text NOT NULL,\n  product_id uuid REFERENCES products(id) ON DELETE CASCADE,\n  condition_quantity int NOT NULL,\n  discount_amount numeric NOT NULL,\n  is_active boolean DEFAULT true,\n  created_at timestamp with time zone DEFAULT timezone(\'utc\'::text, now())\n);\n\nALTER TABLE product_promotions DISABLE ROW LEVEL SECURITY;');
+      if (err.code === '42P01' || err.message?.includes('relation "product_promotions" does not exist')) {
+        alert('กรุณารัน SQL ใน Supabase เพื่อสร้างตารางก่อนนะครับ...');
       } else {
         alert('เกิดข้อผิดพลาดในการบันทึก: ' + err.message);
       }
