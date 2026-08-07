@@ -10,6 +10,7 @@ export default function Preorders() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [viewingSlipUrl, setViewingSlipUrl] = useState(null);
+  const [promotions, setPromotions] = useState([]);
 
   // Manual Preorder Entry Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -40,6 +41,7 @@ export default function Preorders() {
   useEffect(() => {
     fetchData();
     fetchProducts();
+    fetchPromotions();
 
     // Subscribe to preorders real-time changes
     const channel = supabase
@@ -57,6 +59,11 @@ export default function Preorders() {
   const fetchProducts = async () => {
     const { data } = await supabase.from('products').select('*').order('name');
     if (data) setProducts(data);
+  };
+
+  const fetchPromotions = async () => {
+    const { data } = await supabase.from('product_promotions').select('*').eq('is_active', true);
+    if (data) setPromotions(data);
   };
 
   const fetchData = async () => {
@@ -513,11 +520,43 @@ export default function Preorders() {
     return match ? parseInt(match[1], 10) : 0;
   };
 
-  const calculateManualTotal = () => {
+  const calculateSubtotal = () => {
     return orderItems.reduce((sum, item) => {
       const addOn = getFlavorPriceAddOn(item.flavor);
       return sum + ((item.product.selling_price + addOn) * item.quantity);
     }, 0);
+  };
+
+  const calculateProductPromoDiscount = () => {
+    let totalDiscount = 0;
+    const qtyByProduct = {};
+    let totalAllItemsQty = 0;
+
+    orderItems.forEach(item => {
+      const pId = item.product.id;
+      qtyByProduct[pId] = (qtyByProduct[pId] || 0) + item.quantity;
+      totalAllItemsQty += item.quantity;
+    });
+
+    promotions.forEach(promo => {
+      if (promo.product_id) {
+        const qty = qtyByProduct[promo.product_id] || 0;
+        if (qty >= promo.condition_quantity) {
+          const times = Math.floor(qty / promo.condition_quantity);
+          totalDiscount += times * promo.discount_amount;
+        }
+      } else {
+        if (totalAllItemsQty >= promo.condition_quantity) {
+          const times = Math.floor(totalAllItemsQty / promo.condition_quantity);
+          totalDiscount += times * promo.discount_amount;
+        }
+      }
+    });
+    return totalDiscount;
+  };
+
+  const calculateManualTotal = () => {
+    return Math.max(0, calculateSubtotal() - calculateProductPromoDiscount());
   };
 
   const openEditModal = (order) => {
@@ -942,8 +981,18 @@ export default function Preorders() {
                           </div>
                         </div>
                       ))}
-                      <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--primary-dark)', marginTop: '0.5rem' }}>
-                        ยอดรวม: ฿{calculateManualTotal().toFixed(2)}
+                      <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', marginBottom: '0.25rem' }}>
+                          ยอดรวมสินค้า: ฿{calculateSubtotal().toFixed(2)}
+                        </div>
+                        {calculateProductPromoDiscount() > 0 && (
+                          <div style={{ fontSize: '0.9rem', color: 'var(--success)', fontWeight: 600, marginBottom: '0.25rem' }}>
+                            ส่วนลดโปรโมชั่น: -฿{calculateProductPromoDiscount().toFixed(2)}
+                          </div>
+                        )}
+                        <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
+                          ยอดสุทธิ: ฿{calculateManualTotal().toFixed(2)}
+                        </div>
                       </div>
                     </div>
                   )}
