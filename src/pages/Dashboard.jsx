@@ -260,6 +260,72 @@ export default function Dashboard() {
                   style={{ width: '100%' }}
                 />
               </div>
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: 0 }} />
+              <div>
+                <h4 style={{ margin: '0 0 1rem', fontSize: '1.1rem', color: 'var(--primary-dark)' }}>
+                  การแจ้งเตือนผ่านบราวเซอร์ (Push Notifications)
+                </h4>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                  กดปุ่มด้านล่างเพื่ออนุญาตให้เครื่องนี้รับการแจ้งเตือน (เช่น เมื่อมีออร์เดอร์ใหม่) ได้แม้จะปิดหน้าเว็บไปแล้ว (ต้องติดตั้งเว็บนี้เป็นแอป PWA ในมือถือก่อน)
+                </p>
+                <button 
+                  className="btn" 
+                  style={{ background: 'var(--primary)', color: 'white' }}
+                  onClick={async () => {
+                    try {
+                      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                        alert('เบราว์เซอร์นี้ไม่รองรับ Push Notifications');
+                        return;
+                      }
+                      const permission = await Notification.requestPermission();
+                      if (permission !== 'granted') {
+                        alert('กรุณาอนุญาตการแจ้งเตือนในตั้งค่าเบราว์เซอร์');
+                        return;
+                      }
+                      
+                      const urlBase64ToUint8Array = (base64String) => {
+                        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+                        const rawData = window.atob(base64);
+                        const outputArray = new Uint8Array(rawData.length);
+                        for (let i = 0; i < rawData.length; ++i) {
+                          outputArray[i] = rawData.charCodeAt(i);
+                        }
+                        return outputArray;
+                      };
+
+                      const reg = await navigator.serviceWorker.register('/sw.js');
+                      await navigator.serviceWorker.ready;
+                      
+                      const sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array('BOIRzc9lq2BvR35CAOJetY5L1MWMarQsgzdueym9jI9wJx191ZoUqdVx4eF1F18fUoCinLjx8V-099VCDAR879g')
+                      });
+                      
+                      const { data: currentSettings } = await supabase.from('store_settings').select('value').eq('key', 'push_subscriptions').maybeSingle();
+                      let currentSubs = [];
+                      if (currentSettings && currentSettings.value) {
+                        currentSubs = JSON.parse(currentSettings.value);
+                      }
+                      
+                      // Check if already subscribed
+                      const isSubscribed = currentSubs.some(s => s.endpoint === sub.endpoint);
+                      if (!isSubscribed) {
+                        currentSubs.push(sub);
+                        await supabase.from('store_settings').update({ value: JSON.stringify(currentSubs) }).eq('key', 'push_subscriptions');
+                        alert('บันทึกการรับแจ้งเตือนบนเครื่องนี้เรียบร้อยแล้ว!');
+                      } else {
+                        alert('เครื่องนี้เปิดรับการแจ้งเตือนไว้แล้วครับ');
+                      }
+                    } catch (err) {
+                      console.error('Push subscription failed:', err);
+                      alert('เกิดข้อผิดพลาด: ' + err.message);
+                    }
+                  }}
+                >
+                  เปิดรับการแจ้งเตือนบนเครื่องนี้ 🔔
+                </button>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
                 <button 
                   className="btn btn-primary" 

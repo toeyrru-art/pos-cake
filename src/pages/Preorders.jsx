@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2, Image as ImageIcon, CreditCard, Plus, User, Phone, Calendar, X, UploadCloud, MessageSquare, Sparkles } from 'lucide-react';
+import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2, Image as ImageIcon, CreditCard, Plus, User, Phone, Calendar, X, UploadCloud, MessageSquare, Sparkles, Printer } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 export default function Preorders() {
@@ -202,8 +202,164 @@ export default function Preorders() {
       .update({ status: newStatus })
       .eq('id', order.id);
 
-    if (error) alert(error.message);
-    else fetchData();
+    if (error) {
+      alert(error.message);
+    } else {
+      // Send Slack notification for status change
+      try {
+        const { data: slackTokenData } = await supabase
+          .from('store_settings')
+          .select('value')
+          .eq('key', 'slack_webhook_url')
+          .maybeSingle();
+        
+        const webhookUrl = slackTokenData?.value;
+        if (webhookUrl) {
+          let statusText = newStatus;
+          if (newStatus === 'accepted') statusText = 'รับออร์เดอร์แล้ว';
+          if (newStatus === 'completed') statusText = 'ลูกค้ารับขนมแล้ว (เสร็จสิ้น)';
+          if (newStatus === 'pending') statusText = 'รอยืนยัน';
+
+          const message = `อัปเดตสถานะออร์เดอร์: คุณ ${order.customer_name}\nสถานะใหม่: ${statusText}`;
+          await fetch('/api/slack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, webhookUrl })
+          });
+        }
+      } catch (err) {
+        console.log('Slack Notification Error:', err);
+      }
+      
+      fetchData();
+    }
+  };
+
+  const printOrder = (order) => {
+    let iframe = document.getElementById('print-iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+
+    const itemsHtml = (order.preorder_items || []).map(item => `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 20px; border-bottom: 1px dashed #ccc; padding-bottom: 8px;">
+        <span style="flex: 1; padding-right: 8px; line-height: 1.3;">
+          ${item.products?.name || 'เค้ก'}
+          ${item.notes ? `<br><small style="color: #333; font-size: 18px;">(${item.notes})</small>` : ''}
+        </span>
+        <span style="font-weight: bold; font-size: 22px;">x${item.quantity}</span>
+      </div>
+    `).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>พิมพ์ออร์เดอร์</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
+          @page {
+            margin: 0;
+          }
+          body {
+            font-family: 'Kanit', sans-serif;
+            margin: 0;
+            padding: 8px;
+            color: #000;
+            background: #fff;
+            width: 240px; /* Reduced width to force browser to scale up everything */
+            box-sizing: border-box;
+          }
+          .text-center { text-align: center; }
+          .header { font-size: 26px; font-weight: bold; margin-bottom: 8px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+          .customer { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+          .info { font-size: 20px; margin-bottom: 10px; line-height: 1.4; }
+          .footer { margin-top: 10px; border-top: 2px solid #000; padding-top: 8px; font-weight: bold; font-size: 24px; text-align: right; }
+          
+          @media print {
+            html, body { 
+              width: 240px !important; 
+              margin: 0 !important; 
+              padding: 0 4px !important; 
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="text-center header">
+          ใบออร์เดอร์เค้ก
+        </div>
+        <div class="customer">
+          คุณ: ${order.customer_name || 'ลูกค้า'}
+        </div>
+        <div class="info">
+          เบอร์: ${order.customer_phone || '-'}<br>
+          รับ: ${order.pickup_date ? new Date(order.pickup_date).toLocaleDateString('th-TH') : '-'} 
+          เวลา: ${order.pickup_time || (order.pickup_date ? new Date(order.pickup_date).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-')} น.<br>
+          ชำระเงิน: ${order.payment_method === 'transfer' ? 'โอนเงิน' : 'เงินสด'}
+        </div>
+        <div>
+          ${itemsHtml}
+        </div>
+        <div class="footer">
+          ยอดรวม: ฿${(order.total_amount || 0).toFixed(2)}
+        </div>
+      </body>
+      </html>
+    `;
+
+    iframe.contentWindow.document.open();
+    iframe.contentWindow.document.write(html);
+    iframe.contentWindow.document.close();
+
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 500);
+  };
+
+  const toggleItemReceived = async (orderId, itemId, currentStatus) => {
+    // Optimistic UI update
+    setPreorders(prev => prev.map(order => {
+      if (order.id === orderId) {
+        return {
+          ...order,
+          preorder_items: order.preorder_items.map(i => i.id === itemId ? { ...i, is_received: !currentStatus } : i)
+        };
+      }
+      return order;
+    }));
+
+    const { error } = await supabase
+      .from('preorder_items')
+      .update({ is_received: !currentStatus })
+      .eq('id', itemId);
+
+    if (error) {
+      alert('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
+      fetchData(); // revert
+    } else {
+      // Check if all items are now received
+      const order = preorders.find(o => o.id === orderId);
+      if (order && order.status !== 'completed') {
+        const updatedItems = order.preorder_items.map(i => i.id === itemId ? { ...i, is_received: !currentStatus } : i);
+        const allReceived = updatedItems.length > 0 && updatedItems.every(i => i.is_received);
+        if (allReceived) {
+          if (window.confirm('ลูกค้ารับขนมครบทุกรายการแล้ว ต้องการเปลี่ยนสถานะออร์เดอร์เป็น "รับขนมแล้ว" หรือไม่?')) {
+            updateStatus(order, 'completed');
+          }
+        }
+      }
+    }
   };
 
   const deletePreorder = async (order) => {
@@ -878,13 +1034,23 @@ export default function Preorders() {
                       <h4 style={{ fontSize: '1rem', marginBottom: '1rem' }}>รายการที่สั่ง:</h4>
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {order.preorder_items.map((item, idx) => (
-                          <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px dashed var(--border)' }}>
-                            <span>
-                              {item.products?.name} 
-                              {item.notes && <span style={{ color: 'var(--primary-dark)', fontWeight: 600, marginLeft: '0.35rem' }}>({item.notes})</span>}
-                              {' '}x <strong style={{ color: 'var(--primary-dark)' }}>{item.quantity}</strong>
+                          <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px dashed var(--border)', alignItems: 'center' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, flex: 1 }}>
+                              <input 
+                                type="checkbox" 
+                                checked={item.is_received || false}
+                                onChange={() => toggleItemReceived(order.id, item.id, item.is_received)}
+                                style={{ width: '1.2rem', height: '1.2rem', accentColor: 'var(--success)' }}
+                              />
+                              <span style={{ textDecoration: item.is_received ? 'line-through' : 'none', color: item.is_received ? 'var(--text-muted)' : 'inherit' }}>
+                                {item.products?.name} 
+                                {item.notes && <span style={{ color: 'var(--primary-dark)', fontWeight: 600, marginLeft: '0.35rem' }}>({item.notes})</span>}
+                                {' '}x <strong style={{ color: item.is_received ? 'var(--text-muted)' : 'var(--primary-dark)' }}>{item.quantity}</strong>
+                              </span>
+                            </label>
+                            <span style={{ textDecoration: item.is_received ? 'line-through' : 'none', color: item.is_received ? 'var(--text-muted)' : 'inherit' }}>
+                              ฿{(item.price_at_time * item.quantity).toFixed(2)}
                             </span>
-                            <span>฿{(item.price_at_time * item.quantity).toFixed(2)}</span>
                           </li>
                         ))}
                       </ul>
@@ -926,14 +1092,51 @@ export default function Preorders() {
                       <button 
                         className="btn btn-success" 
                         style={{ fontSize: '0.85rem', backgroundColor: 'var(--success)', color: 'white', border: 'none' }}
-                        onClick={() => updateStatus(order, 'completed')}
+                        onClick={async () => {
+                          const hasItems = order.preorder_items && order.preorder_items.length > 0;
+                          if (!hasItems) {
+                            updateStatus(order, 'completed');
+                            return;
+                          }
+                          
+                          const allReceived = order.preorder_items.every(i => i.is_received);
+                          const noneReceived = order.preorder_items.every(i => !i.is_received);
+                          
+                          if (noneReceived) {
+                            // If none are ticked, auto-tick all and complete
+                            if (window.confirm('คุณยังไม่ได้ติ๊กรับขนมเลย ต้องการรับขนมทั้งหมดและปิดออร์เดอร์ใช่หรือไม่?')) {
+                              try {
+                                const itemIds = order.preorder_items.map(i => i.id);
+                                await supabase.from('preorder_items').update({ is_received: true }).in('id', itemIds);
+                                updateStatus(order, 'completed');
+                              } catch(e) {
+                                alert('Error updating items: ' + e.message);
+                              }
+                            }
+                            return;
+                          }
+                          
+                          if (!allReceived) {
+                            alert('กรุณาติ๊กรับขนมให้ครบทุกรายการก่อนกด "รับขนมแล้ว" เพื่อปิดออร์เดอร์เข้าประวัติครับ');
+                            return;
+                          }
+                          
+                          updateStatus(order, 'completed');
+                        }}
                         disabled={order.status === 'completed'}
                       >
                         รับขนมแล้ว
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button 
+                        onClick={() => printOrder(order)}
+                        className="btn btn-outline"
+                        style={{ fontSize: '0.85rem', color: '#636e72', borderColor: '#dfe6e9', padding: '0.5rem 1rem' }}
+                      >
+                        <Printer size={16} /> พิมพ์สติกเกอร์
+                      </button>
                       <button 
                         className="btn btn-outline" 
                         style={{ color: 'var(--primary-dark)', borderColor: 'var(--primary-dark)', fontSize: '0.85rem' }}

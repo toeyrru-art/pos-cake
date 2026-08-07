@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Outlet } from 'react-router-dom';
-import { Award, Cake, Wheat, LayoutDashboard, Store, Wallet, CalendarClock, Calendar as CalendarIcon, Ticket, Menu as MenuIcon, X } from 'lucide-react';
+import { Award, Cake, Wheat, LayoutDashboard, Store, Wallet, CalendarClock, Calendar as CalendarIcon, Ticket, Menu as MenuIcon, X, ShoppingBag } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import './index.css';
 
@@ -14,6 +14,7 @@ import BakingCalendar from './pages/BakingCalendar';
 import CustomerShop from './pages/CustomerShop';
 import Members from './pages/Members';
 import Promotions from './pages/Promotions';
+import ProductPromotions from './pages/ProductPromotions';
 import Login from './pages/Login';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 
@@ -57,8 +58,14 @@ const AdminLayout = () => {
   React.useEffect(() => {
     if (pendingCount > 0) {
       document.title = `(${pendingCount}) ออร์เดอร์ใหม่ - บ้านทุ่ง เบเกอรี่`;
+      if ('setAppBadge' in navigator) {
+        navigator.setAppBadge(pendingCount).catch(console.error);
+      }
     } else {
       document.title = "บ้านทุ่ง เบเกอรี่ (Admin)";
+      if ('clearAppBadge' in navigator) {
+        navigator.clearAppBadge().catch(console.error);
+      }
     }
   }, [pendingCount]);
 
@@ -138,6 +145,10 @@ const AdminLayout = () => {
             <Ticket size={20} />
             <span>โค้ดส่วนลด/บรอดแคสต์</span>
           </NavLink>
+          <NavLink to="/product-promotions" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
+            <ShoppingBag size={20} />
+            <span>จัดการโปรโมชั่น (ซื้อ X ลด Y)</span>
+          </NavLink>
         </nav>
       </aside>
 
@@ -207,6 +218,7 @@ function App() {
             <Route path="menu" element={<Menu />} />
             <Route path="members" element={<Members />} />
             <Route path="promotions" element={<Promotions />} />
+            <Route path="product-promotions" element={<ProductPromotions />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="preorders" element={<Preorders />} />
             <Route path="calendar" element={<BakingCalendar />} />

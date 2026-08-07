@@ -604,3 +604,66 @@ h1, h2, h3, h4, h5, h6 {
   transform: rotate(90deg) scale(1.1);
   box-shadow: 0 4px 8px rgba(255, 107, 157, 0.3);
 }
+
+/* Calendar Responsiveness */
+.calendar-qty-badge {
+  font-size: 0.7rem;
+  font-weight: bold;
+  background: var(--primary);
+  color: white;
+  padding: 1px 5px;
+  border-radius: 10px;
+}
+.calendar-badge {
+  font-size: 0.68rem;
+  padding: 1px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.calendar-cell-indicators {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+@media (max-width: 768px) {
+  .calendar-qty-badge {
+    display: none !important;
+  }
+  .calendar-badge {
+    width: 6px;
+    height: 6px;
+    padding: 0;
+    border-radius: 50%;
+    color: transparent !important;
+    flex-shrink: 0;
+  }
+  .calendar-badge span {
+    display: none;
+  }
+  .calendar-cell-indicators {
+    flex-direction: row;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: auto;
+    margin-bottom: 2px;
+    gap: 3px;
+  }
+  .calendar-day-number {
+    margin: 0 auto;
+  }
+  .calendar-day-cell {
+    min-height: 50px !important;
+    padding: 0.2rem !important;
+    border-radius: 8px !important;
+  }
+  .calendar-card-mobile {
+    padding: 0.75rem !important;
+  }
+}

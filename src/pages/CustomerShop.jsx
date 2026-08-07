@@ -12,6 +12,8 @@ export default function CustomerShop() {
   const [slipFile, setSlipFile] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('transfer');
   const [isStoreOpen, setIsStoreOpen] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [productPromotions, setProductPromotions] = useState([]);
 
   // Selected flavor state per product: { [productId]: flavorString }
   const [selectedFlavors, setSelectedFlavors] = useState({});
@@ -114,15 +116,19 @@ export default function CustomerShop() {
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: prodData } = await supabase
-      .from('products')
-      .select('*')
-      .order('name');
+    const [prodRes, promoRes, preRes] = await Promise.all([
+      supabase.from('products').select('*').order('name'),
+      supabase.from('product_promotions').select('*').eq('is_active', true),
+      supabase.from('preorder_items')
+        .select('product_id, quantity, preorders!inner(status)')
+        .in('preorders.status', ['pending', 'accepted'])
+    ]);
 
-    const { data: activePreorders } = await supabase
-      .from('preorder_items')
-      .select('product_id, quantity, preorders!inner(status)')
-      .in('preorders.status', ['pending', 'accepted']);
+    const activePreorders = preRes.data;
+    
+    if (promoRes.data) {
+      setProductPromotions(promoRes.data);
+    }
 
     const reservedCounts = {};
     if (activePreorders) {
@@ -131,8 +137,8 @@ export default function CustomerShop() {
       });
     }
 
-    if (prodData) {
-      const productsWithLimits = prodData.map(p => {
+    if (prodRes.data) {
+      const productsWithLimits = prodRes.data.map(p => {
         if (p.preorder_limit === null || p.preorder_limit === undefined) {
           return { ...p, remaining: Infinity };
         }
@@ -240,8 +246,21 @@ export default function CustomerShop() {
     return Number(appliedPromo.discount_value) || 0;
   };
 
+  const calculateProductPromoDiscount = () => {
+    let totalPromoDiscount = 0;
+    productPromotions.forEach(promo => {
+      const matchingItems = cart.filter(item => !promo.product_id || item.product.id === promo.product_id);
+      const totalQuantity = matchingItems.reduce((sum, item) => sum + item.quantity, 0);
+      if (totalQuantity >= promo.condition_quantity) {
+        const timesApplied = Math.floor(totalQuantity / promo.condition_quantity);
+        totalPromoDiscount += timesApplied * promo.discount_amount;
+      }
+    });
+    return totalPromoDiscount;
+  };
+
   const calculateDiscount = () => {
-    return calculateRewardDiscount() + calculatePromoDiscount();
+    return calculateRewardDiscount() + calculatePromoDiscount() + calculateProductPromoDiscount();
   };
 
   const calculateTotal = () => {
@@ -336,13 +355,15 @@ export default function CustomerShop() {
 
       const rewardNotice = selectedReward ? `\n🎁 แลกของรางวัล: ${selectedReward.title} (หัก ${selectedReward.points_required} แต้ม)` : '';
       const promoNotice = appliedPromo ? `\n🎟️ โค้ดส่วนลด: ${appliedPromo.code} (ลด ฿${calculatePromoDiscount().toFixed(2)})` : '';
+      const prodPromoDiscount = calculateProductPromoDiscount();
+      const productPromoNotice = prodPromoDiscount > 0 ? `\n🛍️ โปรโมชั่นสินค้า: (ลด ฿${prodPromoDiscount.toFixed(2)})` : '';
 
       const messageText = `\n🆕 ออร์เดอร์ใหม่จากหน้าเว็บ /shop\n\n` +
         `👤 คุณ: ${orderData.customer_name}\n` +
         `📞 เบอร์โทร: ${orderData.customer_phone}\n` +
         `📅 นัดรับวัน-เวลา: ${pickupDateFormatted}\n\n` +
         `🍰 รายการสินค้า:\n${itemsList}\n\n` +
-        `💰 ยอดรวมทั้งสิ้น: ฿${Number(orderData.total_amount).toFixed(2)}${rewardNotice}${promoNotice}\n` +
+        `💰 ยอดรวมทั้งสิ้น: ฿${Number(orderData.total_amount).toFixed(2)}${rewardNotice}${promoNotice}${productPromoNotice}\n` +
         `💳 ชำระโดย: ${orderData.payment_method === 'transfer' ? 'โอนเงิน' : 'ชำระวันรับของ'}\n` +
         (slipUrl ? `🧾 สลิปโอนเงิน: ${slipUrl}` : '');
 
@@ -684,6 +705,49 @@ export default function CustomerShop() {
         document.body
       )}
 
+      {/* Image Modal */}
+      {selectedImage && createPortal(
+        <div className="modal-overlay" style={{ zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setSelectedImage(null)}>
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            <button 
+              type="button" 
+              onClick={() => setSelectedImage(null)}
+              style={{
+                position: 'absolute',
+                top: '-15px',
+                right: '-15px',
+                background: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                cursor: 'pointer',
+                color: 'var(--primary-dark)',
+                zIndex: 10
+              }}
+            >
+              <X size={20} />
+            </button>
+            <img 
+              src={selectedImage} 
+              alt="Enlarged product" 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '90vh', 
+                objectFit: 'contain',
+                borderRadius: '8px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+              }} 
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Shop Content */}
       <main className="shop-layout" style={{ flex: 1, padding: '2rem', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         
@@ -714,8 +778,11 @@ export default function CustomerShop() {
                 return (
                   <div key={p.id} className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
                     {p.image_url ? (
-                      <div style={{ width: '100%', height: '160px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden' }}>
-                        <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div 
+                        style={{ width: '100%', height: '160px', marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer' }}
+                        onClick={() => setSelectedImage(p.image_url)}
+                      >
+                        <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
                       </div>
                     ) : (
                       <div style={{ width: '100%', height: '160px', marginBottom: '1rem', borderRadius: '8px', backgroundColor: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-dark)' }}>
@@ -751,7 +818,11 @@ export default function CustomerShop() {
                               <button
                                 key={idx}
                                 type="button"
-                                onClick={() => setSelectedFlavors({ ...selectedFlavors, [p.id]: f })}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSelectedFlavors(prev => ({ ...prev, [p.id]: f }));
+                                }}
                                 style={{
                                   padding: '0.35rem 0.75rem',
                                   borderRadius: '20px',
@@ -949,6 +1020,12 @@ export default function CustomerShop() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: 'var(--danger)', fontWeight: 600 }}>
                       <span>ส่วนลดจากของรางวัล</span>
                       <span>- ฿{rewardDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {calculateProductPromoDiscount() > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: 'var(--danger)', fontWeight: 600 }}>
+                      <span>โปรโมชั่นสินค้า</span>
+                      <span>- ฿{calculateProductPromoDiscount().toFixed(2)}</span>
                     </div>
                   )}
                   {promoDiscount > 0 && (

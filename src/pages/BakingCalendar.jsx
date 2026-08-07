@@ -14,7 +14,8 @@ import {
   XCircle, 
   Filter, 
   Sparkles,
-  ListOrdered
+  ListOrdered,
+  Printer
 } from 'lucide-react';
 
 export default function BakingCalendar() {
@@ -59,6 +60,7 @@ export default function BakingCalendar() {
           quantity,
           price_at_time,
           notes,
+          is_received,
           products ( name )
         )
       `)
@@ -85,6 +87,99 @@ export default function BakingCalendar() {
       alert('ไม่สามารถอัปเดตสถานะได้: ' + err.message);
     }
   };
+
+  const printOrder = (order) => {
+    let iframe = document.getElementById('print-iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+
+    const itemsHtml = (order.preorder_items || []).map(item => `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 20px; border-bottom: 1px dashed #ccc; padding-bottom: 8px;">
+        <span style="flex: 1; padding-right: 8px; line-height: 1.3;">
+          ${item.products?.name || 'เค้ก'}
+          ${item.notes ? `<br><small style="color: #333; font-size: 18px;">(${item.notes})</small>` : ''}
+        </span>
+        <span style="font-weight: bold; font-size: 22px;">x${item.quantity}</span>
+      </div>
+    `).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>พิมพ์ออร์เดอร์</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
+          @page {
+            margin: 0;
+          }
+          body {
+            font-family: 'Kanit', sans-serif;
+            margin: 0;
+            padding: 8px;
+            color: #000;
+            background: #fff;
+            width: 240px; /* Reduced width to force browser to scale up everything */
+            box-sizing: border-box;
+          }
+          .text-center { text-align: center; }
+          .header { font-size: 26px; font-weight: bold; margin-bottom: 8px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+          .customer { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+          .info { font-size: 20px; margin-bottom: 10px; line-height: 1.4; }
+          .footer { margin-top: 10px; border-top: 2px solid #000; padding-top: 8px; font-weight: bold; font-size: 24px; text-align: right; }
+          
+          @media print {
+            html, body { 
+              width: 240px !important; 
+              margin: 0 !important; 
+              padding: 0 4px !important; 
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="text-center header">
+          ใบออร์เดอร์เค้ก
+        </div>
+        <div class="customer">
+          คุณ: ${order.customer_name || 'ลูกค้า'}
+        </div>
+        <div class="info">
+          เบอร์: ${order.customer_phone || '-'}<br>
+          รับ: ${order.pickup_date ? new Date(order.pickup_date).toLocaleDateString('th-TH') : '-'} 
+          เวลา: ${order.pickup_time || (order.pickup_date ? new Date(order.pickup_date).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-')} น.<br>
+          ชำระเงิน: ${order.payment_method === 'transfer' ? 'โอนเงิน' : 'เงินสด'}
+        </div>
+        <div>
+          ${itemsHtml}
+        </div>
+        <div class="footer">
+          ยอดรวม: ฿${(order.total_amount || 0).toFixed(2)}
+        </div>
+      </body>
+      </html>
+    `;
+
+    iframe.contentWindow.document.open();
+    iframe.contentWindow.document.write(html);
+    iframe.contentWindow.document.close();
+
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 500);
+  };
+
 
   // Helper for Calendar Days calculation
   const year = currentDate.getFullYear();
@@ -253,10 +348,10 @@ export default function BakingCalendar() {
       </div>
 
       {/* Main Layout Grid (Calendar + Daily Summary Side Panel) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
         
         {/* LEFT / TOP: Calendar Component */}
-        <div className="card" style={{ padding: '1.5rem', borderRadius: '16px', background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+        <div className="card calendar-card-mobile" style={{ padding: '1.5rem', borderRadius: '16px', background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
           {/* Calendar Month Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
@@ -297,6 +392,7 @@ export default function BakingCalendar() {
             {prevMonthDays.map((d, i) => (
               <div 
                 key={`prev-${i}`} 
+                className="calendar-day-cell"
                 style={{ 
                   minHeight: '75px', 
                   padding: '0.35rem', 
@@ -322,6 +418,7 @@ export default function BakingCalendar() {
               return (
                 <div
                   key={d}
+                  className="calendar-day-cell"
                   onClick={() => setSelectedDateStr(dateStr)}
                   style={{
                     minHeight: '75px',
@@ -342,7 +439,7 @@ export default function BakingCalendar() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ 
+                    <span className="calendar-day-number" style={{ 
                       fontSize: '0.85rem', 
                       fontWeight: isSelected || isToday ? 'bold' : '500',
                       color: isToday ? 'var(--primary-dark)' : 'inherit',
@@ -353,14 +450,7 @@ export default function BakingCalendar() {
                       {d}
                     </span>
                     {dayData && (
-                      <span style={{ 
-                        fontSize: '0.7rem', 
-                        fontWeight: 'bold',
-                        background: 'var(--primary)',
-                        color: 'white',
-                        padding: '1px 5px',
-                        borderRadius: '10px'
-                      }}>
+                      <span className="calendar-qty-badge">
                         {dayData.totalItems} ชิ้น
                       </span>
                     )}
@@ -368,20 +458,20 @@ export default function BakingCalendar() {
 
                   {/* Badges for Preorders */}
                   {dayData ? (
-                    <div style={{ marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div className="calendar-cell-indicators">
                       {dayData.pendingCount > 0 && (
-                        <div style={{ fontSize: '0.68rem', background: '#ffeaa7', color: '#d63031', padding: '1px 4px', borderRadius: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          ⏳ รอรับ: {dayData.pendingCount}
+                        <div className="calendar-badge" style={{ background: '#ffeaa7', color: '#d63031' }}>
+                          <span>⏳ รอรับ: {dayData.pendingCount}</span>
                         </div>
                       )}
                       {dayData.acceptedCount > 0 && (
-                        <div style={{ fontSize: '0.68rem', background: '#74b9ff', color: '#0984e3', padding: '1px 4px', borderRadius: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          👩‍🍳 กำลังทำ: {dayData.acceptedCount}
+                        <div className="calendar-badge" style={{ background: '#74b9ff', color: '#0984e3' }}>
+                          <span>👩‍🍳 ทำ: {dayData.acceptedCount}</span>
                         </div>
                       )}
                       {dayData.completedCount > 0 && (
-                        <div style={{ fontSize: '0.68rem', background: '#55efc4', color: '#00b894', padding: '1px 4px', borderRadius: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          ✅ รับแล้ว: {dayData.completedCount}
+                        <div className="calendar-badge" style={{ background: '#55efc4', color: '#00b894' }}>
+                          <span>✅ รับ: {dayData.completedCount}</span>
                         </div>
                       )}
                     </div>
@@ -500,10 +590,17 @@ export default function BakingCalendar() {
                       {/* Items Ordered List */}
                       <div style={{ background: '#fcfcfc', borderRadius: '8px', padding: '0.5rem 0.75rem', margin: '0.5rem 0', border: '1px solid #f0f0f0' }}>
                         {po.preorder_items && po.preorder_items.map((item, idx) => (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '2px 0' }}>
+                          <div key={idx} style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            fontSize: '0.85rem', 
+                            padding: '2px 0',
+                            textDecoration: item.is_received ? 'line-through' : 'none',
+                            color: item.is_received ? '#aaa' : 'inherit'
+                          }}>
                             <span>
                               🔹 {item.products?.name || 'เค้ก'} 
-                              {item.notes && <span style={{ color: 'var(--primary)', fontWeight: 500 }}> ({item.notes})</span>}
+                              {item.notes && <span style={{ color: item.is_received ? '#aaa' : 'var(--primary)', fontWeight: 500 }}> ({item.notes})</span>}
                             </span>
                             <span style={{ fontWeight: 'bold' }}>x{item.quantity}</span>
                           </div>
@@ -514,7 +611,14 @@ export default function BakingCalendar() {
                       </div>
 
                       {/* Action buttons to update status */}
-                      <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                        <button 
+                          onClick={() => printOrder(po)}
+                          className="btn btn-outline"
+                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', color: '#636e72', borderColor: '#dfe6e9', borderRadius: '6px' }}
+                        >
+                          <Printer size={13} /> พิมพ์สติกเกอร์
+                        </button>
                         {po.status === 'pending' && (
                           <button 
                             onClick={() => handleUpdateStatus(po.id, 'accepted')}
