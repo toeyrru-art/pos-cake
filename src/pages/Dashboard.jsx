@@ -11,7 +11,10 @@ export default function Dashboard() {
     salesToday: 0,
     incomeToday: 0,
     financeData: [],
-    topSellers: []
+    topSellers: [],
+    totalIncome7Days: 0,
+    totalExpense7Days: 0,
+    totalProfit7Days: 0
   });
   const [loading, setLoading] = useState(true);
   const [isStoreOpen, setIsStoreOpen] = useState(true);
@@ -59,11 +62,17 @@ export default function Dashboard() {
       }
 
       let income = 0;
+      let totalIncome7Days = 0;
+      let totalExpense7Days = 0;
       
       if (allTxData) {
         allTxData.forEach(tx => {
           const d = new Date(tx.created_at);
           const dateStr = d.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' });
+          
+          if (tx.type === 'income') totalIncome7Days += Number(tx.amount);
+          if (tx.type === 'expense') totalExpense7Days += Number(tx.amount);
+
           if (financeMap[dateStr]) {
             if (tx.type === 'income') {
               financeMap[dateStr].รายรับ += Number(tx.amount);
@@ -124,7 +133,10 @@ export default function Dashboard() {
         salesToday: salesCount,
         incomeToday: income,
         financeData,
-        topSellers
+        topSellers,
+        totalIncome7Days,
+        totalExpense7Days,
+        totalProfit7Days: totalIncome7Days - totalExpense7Days
       });
 
       setLoading(false);
@@ -386,8 +398,25 @@ export default function Dashboard() {
 
       {/* Analytics Section */}
       <div style={{ display: 'flex', gap: '1.5rem', marginTop: '2rem', flexWrap: 'wrap' }}>
-        {/* Revenue Chart */}
+        {/* Main Charts Area */}
         <div style={{ flex: '1 1 60%', minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* 7-Days Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'var(--success)', color: 'white', border: 'none' }}>
+              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>รายรับ (7 วัน)</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '0.5rem' }}>฿{stats.totalIncome7Days.toFixed(2)}</div>
+            </div>
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'var(--danger)', color: 'white', border: 'none' }}>
+              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>รายจ่าย (7 วัน)</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '0.5rem' }}>฿{stats.totalExpense7Days.toFixed(2)}</div>
+            </div>
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: 'var(--primary-dark)', color: 'white', border: 'none' }}>
+              <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>กำไรสุทธิ (7 วัน)</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '0.5rem' }}>฿{stats.totalProfit7Days.toFixed(2)}</div>
+            </div>
+          </div>
+
           {/* Income & Expense Chart */}
           <div className="card" style={{ height: '320px', display: 'flex', flexDirection: 'column' }}>
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
