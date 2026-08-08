@@ -164,7 +164,7 @@ export default function BakingCalendar() {
           ${itemsHtml}
         </div>
         <div class="footer">
-          ยอดรวม: ฿${(order.total_amount || 0).toFixed(2)}
+          ยอดรวม: ฿${Number(order.total_amount || 0).toFixed(2)}
         </div>
       </body>
       </html>
@@ -265,7 +265,7 @@ export default function BakingCalendar() {
     let itemCount = 0;
     if (po.preorder_items) {
       po.preorder_items.forEach(item => {
-        itemCount += item.quantity || 0;
+        itemCount += Number(item.quantity || 0);
       });
     }
     preordersByDate[dateKey].totalItems += itemCount;
@@ -289,7 +289,7 @@ export default function BakingCalendar() {
         }
 
         const key = flavorText ? `${prodName} (${flavorText})` : prodName;
-        bakingSummaryMap[key] = (bakingSummaryMap[key] || 0) + (item.quantity || 0);
+        bakingSummaryMap[key] = (bakingSummaryMap[key] || 0) + Number(item.quantity || 0);
       });
     }
   });
@@ -497,7 +497,7 @@ export default function BakingCalendar() {
                 </h3>
               </div>
               <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'white', background: 'var(--primary)', padding: '2px 10px', borderRadius: '12px' }}>
-                รวม {Object.values(bakingSummaryMap).reduce((a, b) => a + b, 0)} ชิ้น
+                รวม {Object.values(bakingSummaryMap).reduce((a, b) => Number(a) + Number(b), 0)} ชิ้น
               </span>
             </div>
 
@@ -606,7 +606,7 @@ export default function BakingCalendar() {
                           </div>
                         ))}
                         <div style={{ textAlign: 'right', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary-dark)', marginTop: '0.35rem', borderTop: '1px dashed #eee', paddingTop: '0.25rem' }}>
-                          ยอดรวม: ฿{(po.total_amount || 0).toFixed(2)}
+                          ยอดรวม: ฿{Number(po.total_amount || 0).toFixed(2)}
                         </div>
                       </div>
 
