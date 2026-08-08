@@ -429,9 +429,15 @@ export default function POS() {
               </div>
 
               <div style={{ borderTop: '2px dashed var(--border)', paddingTop: '1rem', marginBottom: '1.5rem' }}>
+                {calculateTotal().discount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: 'var(--success)', marginBottom: '0.5rem', fontWeight: 600 }}>
+                    <span>ส่วนลดโปรโมชั่น:</span>
+                    <span>-฿{calculateTotal().discount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', fontWeight: 'bold' }}>
                   <span>ราคารวมทั้งสิ้น</span>
-                  <span style={{ color: 'var(--primary-dark)' }}>฿{calculateTotal().toFixed(2)}</span>
+                  <span style={{ color: 'var(--primary-dark)' }}>฿{calculateTotal().finalTotal.toFixed(2)}</span>
                 </div>
               </div>
 
