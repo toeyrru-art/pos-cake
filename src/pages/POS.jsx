@@ -92,7 +92,7 @@ export default function POS() {
         .select(`
           id, total_amount, created_at,
           sale_items (
-            id, product_id, quantity, price_at_time, notes,
+            id, product_id, quantity, price_at_time,
             product:products (*)
           )
         `)
@@ -127,7 +127,7 @@ export default function POS() {
     const newCart = sale.sale_items.map(item => ({
       product: item.product,
       quantity: item.quantity,
-      flavor: item.notes ? item.notes.replace('หน้า/รส: ', '') : null
+      flavor: null
     }));
     
     setCart(newCart);
@@ -194,8 +194,7 @@ export default function POS() {
           sale_id: saleId,
           product_id: item.product.id,
           quantity: item.quantity,
-          price_at_time: item.product.selling_price + addOn,
-          notes: item.flavor ? `หน้า/รส: ${item.flavor}` : null
+          price_at_time: item.product.selling_price + addOn
         };
       });
       await supabase.from('sale_items').insert(saleItemsData);
@@ -263,7 +262,7 @@ export default function POS() {
                         {sale.sale_items.map(item => (
                           <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                             <div>
-                              - {item.product?.name || 'สินค้าที่ถูกลบ'} {item.notes && <span className="text-muted">({item.notes})</span>}
+                              - {item.product?.name || 'สินค้าที่ถูกลบ'}
                             </div>
                             <div>x {item.quantity}</div>
                           </div>
