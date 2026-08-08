@@ -19,6 +19,7 @@ export default function Transactions() {
     amount: '',
     description: ''
   });
+  const [editingId, setEditingId] = useState(null);
 
   const handleScanReceipt = async (e) => {
     const file = e.target.files?.[0];
@@ -127,7 +128,7 @@ export default function Transactions() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const addTransaction = async (e) => {
+  const saveTransaction = async (e) => {
     e.preventDefault();
     if (!formData.amount || !formData.description) {
       alert('กรุณากรอกข้อมูลให้ครบถ้วน');
@@ -140,13 +141,48 @@ export default function Transactions() {
       description: formData.description
     };
 
-    const { error } = await supabase.from('transactions').insert([payload]);
+    if (editingId) {
+      const { error } = await supabase.from('transactions').update(payload).eq('id', editingId);
+      if (error) {
+        alert(error.message);
+      } else {
+        resetForm();
+        fetchData();
+      }
+    } else {
+      const { error } = await supabase.from('transactions').insert([payload]);
+      if (error) {
+        alert(error.message);
+      } else {
+        resetForm();
+        fetchData();
+      }
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ type: 'expense', amount: '', description: '' });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const handleEdit = (t) => {
+    setFormData({
+      type: t.type,
+      amount: t.amount,
+      description: t.description
+    });
+    setEditingId(t.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) return;
     
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
     if (error) {
       alert(error.message);
     } else {
-      setFormData({ type: 'expense', amount: '', description: '' });
-      setShowForm(false);
       fetchData();
     }
   };
@@ -216,8 +252,10 @@ export default function Transactions() {
       {/* Add Transaction Form */}
       {showForm && (
         <div className="card mb-4" style={{ backgroundColor: 'var(--bg-sidebar)' }}>
-          <h4 style={{ marginBottom: '1rem', fontWeight: 'bold' }}>บันทึกรายรับ/รายจ่าย</h4>
-          <form onSubmit={addTransaction} className="flex flex-wrap gap-4 items-end">
+          <h4 style={{ marginBottom: '1rem', fontWeight: 'bold' }}>
+            {editingId ? 'แก้ไขรายการ' : 'บันทึกรายรับ/รายจ่าย'}
+          </h4>
+          <form onSubmit={saveTransaction} className="flex flex-wrap gap-4 items-end">
             <div className="form-group" style={{ flex: '1 1 150px', marginBottom: 0 }}>
               <label className="form-label">ประเภท</label>
               <select name="type" value={formData.type} onChange={handleInputChange} className="form-control">
@@ -237,8 +275,8 @@ export default function Transactions() {
             </div>
 
             <div className="flex gap-2">
-              <button type="submit" className="btn btn-primary">บันทึก</button>
-              <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>ยกเลิก</button>
+              <button type="submit" className="btn btn-primary">{editingId ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
+              <button type="button" className="btn btn-outline" onClick={resetForm}>ยกเลิก</button>
             </div>
           </form>
         </div>
@@ -258,12 +296,13 @@ export default function Transactions() {
                   <th>รายละเอียด</th>
                   <th>ประเภท</th>
                   <th>จำนวนเงิน</th>
+                  <th style={{ width: '120px' }}>จัดการ</th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="text-center text-muted">ยังไม่มีประวัติรายการ</td>
+                    <td colSpan="5" className="text-center text-muted">ยังไม่มีประวัติรายการ</td>
                   </tr>
                 ) : (
                   transactions.map((t) => (
@@ -281,6 +320,16 @@ export default function Transactions() {
                       </td>
                       <td style={{ fontWeight: 'bold', color: t.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
                         {t.type === 'income' ? '+' : '-'}฿{Number(t.amount).toFixed(2)}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button className="btn btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleEdit(t)}>
+                            แก้ไข
+                          </button>
+                          <button className="btn btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => handleDelete(t.id)}>
+                            ลบ
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
