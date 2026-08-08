@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { Cake, ShoppingCart, DollarSign, Store as StoreIcon, BarChart3, TrendingUp, Calendar, Settings, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
     products: 0,
     salesToday: 0,
     incomeToday: 0,
-    revenueData: [],
+    financeData: [],
     topSellers: []
   });
   const [loading, setLoading] = useState(true);
@@ -39,40 +39,48 @@ export default function Dashboard() {
       const { data: allSalesData } = await supabase
         .from('sales')
         .select('total_amount, created_at')
-        .gte('created_at', sevenDaysAgo.toISOString());
+        .gte('created_at', today.toISOString());
       
-      // Compute Daily Revenue Data
-      const revenueMap = {};
+      let salesCount = allSalesData ? allSalesData.length : 0;
+
+      // Fetch 7 days transactions for chart
+      const { data: allTxData } = await supabase
+        .from('transactions')
+        .select('amount, type, created_at')
+        .gte('created_at', sevenDaysAgo.toISOString());
+
+      // Compute Daily Finance Data
+      const financeMap = {};
       for (let i = 0; i < 7; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dateStr = d.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' });
-        revenueMap[dateStr] = 0;
+        financeMap[dateStr] = { name: dateStr, รายรับ: 0, รายจ่าย: 0, กำไร: 0 };
       }
 
-      let salesCount = 0;
       let income = 0;
       
-      if (allSalesData) {
-        allSalesData.forEach(sale => {
-          const d = new Date(sale.created_at);
+      if (allTxData) {
+        allTxData.forEach(tx => {
+          const d = new Date(tx.created_at);
           const dateStr = d.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' });
-          if (revenueMap[dateStr] !== undefined) {
-            revenueMap[dateStr] += Number(sale.total_amount);
+          if (financeMap[dateStr]) {
+            if (tx.type === 'income') {
+              financeMap[dateStr].รายรับ += Number(tx.amount);
+            } else if (tx.type === 'expense') {
+              financeMap[dateStr].รายจ่าย += Number(tx.amount);
+            }
+            financeMap[dateStr].กำไร = financeMap[dateStr].รายรับ - financeMap[dateStr].รายจ่าย;
           }
           
-          if (d >= today) {
-            salesCount++;
-            income += Number(sale.total_amount);
+          if (d >= today && tx.type === 'income') {
+            income += Number(tx.amount);
           }
         });
       }
 
-      // Convert revenue map to array (oldest to newest)
-      const revenueData = Object.keys(revenueMap).reverse().map(key => ({
-        name: key,
-        ยอดขาย: revenueMap[key]
-      }));
+      // Convert finance map to array (oldest to newest)
+      const financeData = Object.keys(financeMap).reverse().map(key => financeMap[key]);
 
       // Top Sellers
       const { data: saleItemsData } = await supabase
@@ -115,7 +123,7 @@ export default function Dashboard() {
         products: pCount || 0,
         salesToday: salesCount,
         incomeToday: income,
-        revenueData,
+        financeData,
         topSellers
       });
 
@@ -381,17 +389,20 @@ export default function Dashboard() {
         {/* Revenue Chart */}
         <div className="card" style={{ flex: '1 1 60%', minWidth: '320px' }}>
           <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
-            <BarChart3 size={20} /> กราฟยอดขาย 7 วันย้อนหลัง
+            <BarChart3 size={20} /> กราฟรายรับ รายจ่าย และกำไร 7 วันย้อนหลัง
           </h4>
-          <div style={{ height: '300px', width: '100%' }}>
+          <div style={{ height: '350px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.revenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <ComposedChart data={stats.financeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
-                <Tooltip cursor={{ fill: 'var(--primary-light)', opacity: 0.4 }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: 'var(--shadow-md)' }} />
-                <Bar dataKey="ยอดขาย" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={50} />
-              </BarChart>
+                <Tooltip cursor={{ fill: 'var(--bg-sidebar)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: 'var(--shadow-md)' }} />
+                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                <Bar dataKey="รายรับ" fill="var(--success)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="รายจ่าย" fill="var(--danger)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Line type="monotone" dataKey="กำไร" stroke="var(--primary-dark)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
