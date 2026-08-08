@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { Cake, ShoppingCart, DollarSign, Store as StoreIcon, BarChart3, TrendingUp, Calendar, Settings, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -387,22 +387,44 @@ export default function Dashboard() {
       {/* Analytics Section */}
       <div style={{ display: 'flex', gap: '1.5rem', marginTop: '2rem', flexWrap: 'wrap' }}>
         {/* Revenue Chart */}
-        <div className="card" style={{ flex: '1 1 60%', minWidth: '320px' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
-            <BarChart3 size={20} /> กราฟรายรับ รายจ่าย และกำไร 7 วันย้อนหลัง
-          </h4>
-          <div style={{ height: '350px', width: '100%' }}>
+        <div style={{ flex: '1 1 60%', minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Income & Expense Chart */}
+          <div className="card" style={{ height: '320px', display: 'flex', flexDirection: 'column' }}>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
+              <BarChart3 size={20} /> กราฟรายรับและรายจ่าย 7 วันย้อนหลัง
+            </h4>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={stats.financeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={stats.financeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
                 <Tooltip cursor={{ fill: 'var(--bg-sidebar)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: 'var(--shadow-md)' }} />
-                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                <Legend wrapperStyle={{ paddingTop: '10px' }} />
                 <Bar dataKey="รายรับ" fill="var(--success)" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 <Bar dataKey="รายจ่าย" fill="var(--danger)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                <Line type="monotone" dataKey="กำไร" stroke="var(--primary-dark)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              </ComposedChart>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Profit Area Chart */}
+          <div className="card" style={{ height: '280px', display: 'flex', flexDirection: 'column' }}>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
+              <TrendingUp size={20} /> กราฟกำไรสุทธิ
+            </h4>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.financeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--primary-dark)" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="var(--primary-dark)" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: 'var(--shadow-md)' }} />
+                <Area type="monotone" dataKey="กำไร" stroke="var(--primary-dark)" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
