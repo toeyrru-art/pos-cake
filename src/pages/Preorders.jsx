@@ -111,7 +111,25 @@ export default function Preorders() {
       }
     }
 
-    if (preorderData) setPreorders(preorderData);
+    if (preorderData) {
+      const statusPriority = {
+        pending: 1,
+        accepted: 2,
+        completed: 3,
+        cancelled: 4
+      };
+
+      preorderData.sort((a, b) => {
+        const pA = statusPriority[a.status] || 99;
+        const pB = statusPriority[b.status] || 99;
+        if (pA !== pB) {
+          return pA - pB;
+        }
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+
+      setPreorders(preorderData);
+    }
     setLoading(false);
   };
 
