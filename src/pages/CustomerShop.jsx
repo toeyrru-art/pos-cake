@@ -386,7 +386,7 @@ export default function CustomerShop() {
     
     const actualPickupDate = pickupDateMode === 'fixed' ? fixedPickupDate : formData.pickupDate;
     
-    if (!formData.name || !formData.phone || !actualPickupDate) {
+    if (!formData.name || !actualPickupDate) {
       return alert('กรุณากรอกข้อมูลให้ครบถ้วน');
     }
 
@@ -1074,7 +1074,7 @@ export default function CustomerShop() {
                   
                   <div className="form-group">
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Phone size={14}/> เบอร์โทรศัพท์ (สำหรับสะสมแต้ม)</label>
-                    <input type="tel" name="phone" required value={formData.phone} onChange={handleInputChange} className="form-control" placeholder="08X-XXX-XXXX" />
+                    <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="form-control" placeholder="08X-XXX-XXXX" />
                   </div>
 
                   {/* Member Points & Rewards Section */}
