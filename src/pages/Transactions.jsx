@@ -9,6 +9,9 @@ export default function Transactions() {
   const [scanning, setScanning] = useState(false);
   const fileInputRef = useRef(null);
   
+  // Filter state
+  const [filterDate, setFilterDate] = useState('');
+  
   // Summary state
   const [summary, setSummary] = useState({ income: 0, expense: 0, net: 0 });
 
@@ -98,15 +101,29 @@ export default function Transactions() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [filterDate]);
 
   const fetchData = async () => {
     setLoading(true);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('transactions')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (filterDate) {
+      const startOfDay = new Date(filterDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(filterDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      query = query
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString());
+    }
+
+    const { data, error } = await query;
 
     if (data) {
       setTransactions(data);
@@ -284,7 +301,28 @@ export default function Transactions() {
 
       {/* Transactions List */}
       <div className="card">
-        <h4 style={{ marginBottom: '1rem', fontWeight: 'bold' }}>ประวัติรายการ</h4>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <h4 style={{ margin: 0, fontWeight: 'bold' }}>ประวัติรายการ</h4>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>กรองตามวันที่:</label>
+            <input 
+              type="date" 
+              className="form-control premium-input"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              style={{ width: 'auto', padding: '0.35rem 0.75rem' }}
+            />
+            {filterDate && (
+              <button 
+                className="btn btn-outline" 
+                onClick={() => setFilterDate('')}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+              >
+                ล้าง
+              </button>
+            )}
+          </div>
+        </div>
         {loading ? (
           <p className="text-center text-muted">กำลังโหลด...</p>
         ) : (
