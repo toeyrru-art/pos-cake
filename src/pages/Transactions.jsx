@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { TrendingUp, TrendingDown, DollarSign, Plus, Camera, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Plus, Camera, Loader2, X, UploadCloud, Clipboard } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default function Transactions() {
@@ -9,6 +10,11 @@ export default function Transactions() {
   const [scanning, setScanning] = useState(false);
   const fileInputRef = useRef(null);
   
+  // Scan Modal state
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanImageFile, setScanImageFile] = useState(null);
+  const [scanImagePreview, setScanImagePreview] = useState(null);
+
   // Filter state
   const [filterDate, setFilterDate] = useState('');
   
@@ -24,9 +30,40 @@ export default function Transactions() {
   });
   const [editingId, setEditingId] = useState(null);
 
-  const handleScanReceipt = async (e) => {
-    const file = e.target.files?.[0];
+  const handleFileChange = (file) => {
     if (!file) return;
+    setScanImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setScanImagePreview(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        handleFileChange(file);
+        break;
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (showScanModal) {
+      window.addEventListener('paste', handlePaste);
+    } else {
+      window.removeEventListener('paste', handlePaste);
+      setScanImageFile(null);
+      setScanImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [showScanModal]);
+
+  const processScanImage = async () => {
+    if (!scanImageFile) return;
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
@@ -36,20 +73,10 @@ export default function Transactions() {
 
     setScanning(true);
     try {
-      // 1. Convert File to Base64
-      const reader = new FileReader();
-      const base64Promise = new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = error => reject(error);
-      });
-      reader.readAsDataURL(file);
-      const base64Data = await base64Promise;
-
-      // 2. Initialize Gemini AI
+      const base64Data = scanImagePreview.split(',')[1];
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
-      // 3. Prompt for Receipt Extraction
       const prompt = `
         ให้อ่านภาพสลิปโอนเงิน หรือใบเสร็จรับเงินนี้
         และดึงข้อมูลยอดเงินรวม (amount) กับรายละเอียดสินค้า/บริการ (description) สรุปเป็นภาษาไทยสั้นๆ
@@ -59,23 +86,12 @@ export default function Transactions() {
         {"amount": 150.50, "description": "ซื้อ..."}
       `;
 
-      const imageParts = [
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType: file.type
-          }
-        }
-      ];
-
-      // 4. Call AI
+      const imageParts = [{ inlineData: { data: base64Data, mimeType: scanImageFile.type } }];
       const result = await model.generateContent([prompt, ...imageParts]);
       const response = await result.response;
       let text = response.text();
       
-      // Clean up markdown code blocks if any
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      
       const parsed = JSON.parse(text);
       
       if (parsed.amount) {
@@ -84,18 +100,16 @@ export default function Transactions() {
           amount: parsed.amount,
           description: parsed.description || prev.description
         }));
-        setShowForm(true); // Open form if closed
+        setShowScanModal(false);
+        setShowForm(true);
       } else {
         alert('AI ไม่สามารถอ่านข้อมูลยอดเงินจากภาพนี้ได้');
       }
-
     } catch (error) {
       console.error(error);
       alert('เกิดข้อผิดพลาดในการอ่านภาพ: ' + error.message);
     } finally {
       setScanning(false);
-      // Reset input
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -213,23 +227,97 @@ export default function Transactions() {
             type="file" 
             accept="image/*" 
             ref={fileInputRef} 
-            onChange={handleScanReceipt} 
+            onChange={(e) => handleFileChange(e.target.files?.[0])} 
             style={{ display: 'none' }} 
           />
           <button 
             className="btn btn-outline" 
-            onClick={() => fileInputRef.current?.click()}
-            disabled={scanning}
+            onClick={() => setShowScanModal(true)}
             style={{ backgroundColor: 'var(--primary-light)', borderColor: 'var(--primary-light)' }}
           >
-            {scanning ? <Loader2 className="animate-spin" size={16} /> : <Camera size={16} />} 
-            {scanning ? 'กำลังสแกน...' : 'สแกนใบเสร็จ'}
+            <Camera size={16} /> สแกนใบเสร็จ
           </button>
           <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
             <Plus size={16} /> บันทึกรายการใหม่
           </button>
         </div>
       </div>
+
+      {showScanModal && createPortal(
+        <div className="modal-overlay" onClick={() => !scanning && setShowScanModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', textAlign: 'center' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Camera size={20} /> สแกนใบเสร็จ
+              </h3>
+              {!scanning && (
+                <button onClick={() => setShowScanModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+              )}
+            </div>
+            
+            <div style={{ padding: '1rem 0' }}>
+              {!scanImagePreview ? (
+                <div 
+                  style={{ 
+                    border: '2px dashed var(--border)', 
+                    borderRadius: '12px', 
+                    padding: '3rem 2rem',
+                    cursor: 'pointer',
+                    backgroundColor: 'var(--bg-main)'
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <UploadCloud size={48} color="var(--primary-dark)" style={{ margin: '0 auto 1rem', opacity: 0.8 }} />
+                  <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>คลิกเพื่ออัปโหลดรูปภาพ</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
+                    <Clipboard size={16} /> หรือสามารถกด Ctrl+V / Cmd+V เพื่อวางรูปได้เลย
+                  </p>
+                </div>
+              ) : (
+                <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+                  <img src={scanImagePreview} alt="Receipt Preview" style={{ maxHeight: '300px', maxWidth: '100%', borderRadius: '8px', objectFit: 'contain' }} />
+                  {!scanning && (
+                    <button 
+                      onClick={() => { setScanImageFile(null); setScanImagePreview(null); }}
+                      style={{ 
+                        position: 'absolute', top: '-10px', right: '-10px', 
+                        background: 'var(--danger)', color: 'white', 
+                        border: 'none', borderRadius: '50%', 
+                        width: '30px', height: '30px', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        cursor: 'pointer', boxShadow: 'var(--shadow-md)' 
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+              <button 
+                className="btn btn-outline" 
+                onClick={() => setShowScanModal(false)} 
+                disabled={scanning}
+              >
+                ยกเลิก
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={processScanImage} 
+                disabled={!scanImageFile || scanning}
+                style={{ minWidth: '120px' }}
+              >
+                {scanning ? <><Loader2 className="animate-spin" size={16} style={{ display: 'inline', marginRight: '4px' }} /> กำลังสแกน...</> : 'ดึงข้อมูล'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
