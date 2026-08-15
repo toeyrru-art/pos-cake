@@ -75,7 +75,7 @@ export default function Transactions() {
     try {
       const base64Data = scanImagePreview.split(',')[1];
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const prompt = `
         ให้อ่านภาพสลิปโอนเงิน หรือใบเสร็จรับเงินนี้
@@ -107,7 +107,11 @@ export default function Transactions() {
       }
     } catch (error) {
       console.error(error);
-      alert('เกิดข้อผิดพลาดในการอ่านภาพ: ' + error.message);
+      if (error.message && error.message.includes('503')) {
+        alert('ระบบ AI กำลังมีผู้ใช้งานจำนวนมาก กรุณาลองใหม่อีกครั้งในภายหลัง หรือกรอกข้อมูลด้วยตัวเองครับ');
+      } else {
+        alert('เกิดข้อผิดพลาดในการอ่านภาพ: ' + error.message);
+      }
     } finally {
       setScanning(false);
     }
