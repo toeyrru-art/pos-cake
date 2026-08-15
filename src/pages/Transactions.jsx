@@ -75,7 +75,6 @@ export default function Transactions() {
     try {
       const base64Data = scanImagePreview.split(',')[1];
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const prompt = `
         ให้อ่านภาพสลิปโอนเงิน หรือใบเสร็จรับเงินนี้
@@ -87,13 +86,49 @@ export default function Transactions() {
       `;
 
       const imageParts = [{ inlineData: { data: base64Data, mimeType: scanImageFile.type } }];
-      const result = await model.generateContent([prompt, ...imageParts]);
-      const response = await result.response;
-      let text = response.text();
-      
+
+      const modelsToTry = [
+        "gemini-1.5-flash",
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-pro",
+        "gemini-flash-latest"
+      ];
+
+      let lastError = null;
+      let text = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const result = await model.generateContent([prompt, ...imageParts]);
+              const response = await result.response;
+              text = response.text();
+              if (text) break;
+            } catch (err) {
+              lastError = err;
+              if (err.message && (err.message.includes('503') || err.message.includes('429'))) {
+                await new Promise(r => setTimeout(r, 1000));
+              } else {
+                throw err;
+              }
+            }
+          }
+          if (text) break;
+        } catch (mErr) {
+          console.warn(`Model ${modelName} failed:`, mErr);
+          lastError = mErr;
+        }
+      }
+
+      if (!text) {
+        throw lastError || new Error('ไม่สามารถเชื่อมต่อ AI ได้ทุกโมเดล');
+      }
+
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(text);
-      
+
       if (parsed.amount) {
         setFormData(prev => ({
           ...prev,
@@ -107,8 +142,8 @@ export default function Transactions() {
       }
     } catch (error) {
       console.error(error);
-      if (error.message && error.message.includes('503')) {
-        alert('ระบบ AI กำลังมีผู้ใช้งานจำนวนมาก กรุณาลองใหม่อีกครั้งในภายหลัง หรือกรอกข้อมูลด้วยตัวเองครับ');
+      if (error.message && (error.message.includes('503') || error.message.includes('429'))) {
+        alert('ขณะนี้ระบบ AI ของ Google มีผู้ใช้งานหนาแน่นชั่วคราว (503/429) กรุณารอประมาณ 10-20 วินาทีแล้วลองกดดึงข้อมูลอีกครั้ง หรือกรอกข้อมูลด้วยตัวเองครับ');
       } else {
         alert('เกิดข้อผิดพลาดในการอ่านภาพ: ' + error.message);
       }
