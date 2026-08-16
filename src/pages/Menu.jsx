@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Trash2, Edit2, Save, X, Loader2, Cake, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Loader2, Cake, CheckCircle2, XCircle, Calculator } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 export default function Menu() {
@@ -186,11 +187,16 @@ export default function Menu() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>จัดการเมนูเค้ก</h3>
-        <button className="btn btn-primary" onClick={() => { resetForm(); setIsModalOpen(true); }}>
-          <Plus size={16} /> เพิ่มเมนูเค้ก
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link to="/calculator" className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'var(--primary-light)', borderColor: 'var(--primary-light)' }}>
+            <Calculator size={16} /> คำนวณราคาขายจากทุน
+          </Link>
+          <button className="btn btn-primary" onClick={() => { resetForm(); setIsModalOpen(true); }}>
+            <Plus size={16} /> เพิ่มเมนูเค้ก
+          </button>
+        </div>
       </div>
 
       {isModalOpen && createPortal(

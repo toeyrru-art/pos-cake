@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Outlet } from 'react-router-dom';
-import { Award, Cake, Wheat, LayoutDashboard, Store, Wallet, CalendarClock, Calendar as CalendarIcon, Ticket, Menu as MenuIcon, X, ShoppingBag } from 'lucide-react';
+import { Award, Cake, Wheat, LayoutDashboard, Store, Wallet, CalendarClock, Calendar as CalendarIcon, Ticket, Menu as MenuIcon, X, ShoppingBag, Calculator } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import './index.css';
 
@@ -15,6 +15,7 @@ import CustomerShop from './pages/CustomerShop';
 import Members from './pages/Members';
 import Promotions from './pages/Promotions';
 import ProductPromotions from './pages/ProductPromotions';
+import CostCalculator from './pages/CostCalculator';
 import Login from './pages/Login';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 
@@ -149,6 +150,10 @@ const AdminLayout = () => {
             <ShoppingBag size={20} />
             <span>จัดการโปรโมชั่น (ซื้อ X ลด Y)</span>
           </NavLink>
+          <NavLink to="/calculator" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={closeSidebar}>
+            <Calculator size={20} />
+            <span>คำนวณราคาขาย/ต้นทุน</span>
+          </NavLink>
         </nav>
       </aside>
 
@@ -219,6 +224,7 @@ function App() {
             <Route path="members" element={<Members />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="product-promotions" element={<ProductPromotions />} />
+            <Route path="calculator" element={<CostCalculator />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="preorders" element={<Preorders />} />
             <Route path="calendar" element={<BakingCalendar />} />
