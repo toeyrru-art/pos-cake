@@ -7,16 +7,25 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const auth = localStorage.getItem('adminAuth');
-    if (auth === 'true') {
-      setIsAuthenticated(true);
+    try {
+      const auth = localStorage.getItem('adminAuth');
+      if (auth === 'true') {
+        setIsAuthenticated(true);
+      }
+    } catch (err) {
+      console.warn('localStorage access denied', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = (pin) => {
     if (pin === '123456') { // Hardcoded PIN for simplicity
-      localStorage.setItem('adminAuth', 'true');
+      try {
+        localStorage.setItem('adminAuth', 'true');
+      } catch (err) {
+        console.warn('localStorage access denied', err);
+      }
       setIsAuthenticated(true);
       return true;
     }
@@ -24,7 +33,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('adminAuth');
+    try {
+      localStorage.removeItem('adminAuth');
+    } catch (err) {
+      console.warn('localStorage access denied', err);
+    }
     setIsAuthenticated(false);
   };
 
