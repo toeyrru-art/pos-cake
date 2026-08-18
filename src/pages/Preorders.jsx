@@ -1058,13 +1058,13 @@ export default function Preorders() {
 
       {loading ? (
         <div className="card text-center text-muted">กำลังโหลดข้อมูล...</div>
-      ) : filteredOrders.length === 0 ? (
+      ) : displayPreorders.length === 0 ? (
         <div className="card text-center text-muted">
           ยังไม่มีรายการพรีออร์เดอร์ในหมวดหมู่นี้
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {filteredOrders.map(order => (
+          {displayPreorders.map(order => (
             <div key={order.id} className="card" style={{ padding: '1.5rem' }}>
               <div 
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
