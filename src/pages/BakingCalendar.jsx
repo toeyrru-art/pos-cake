@@ -15,7 +15,10 @@ import {
   Filter, 
   Sparkles,
   ListOrdered,
-  Printer
+  Printer,
+  Wallet,
+  Coins,
+  Banknote
 } from 'lucide-react';
 
 export default function BakingCalendar() {
@@ -251,12 +254,26 @@ export default function BakingCalendar() {
         pendingCount: 0,
         acceptedCount: 0,
         completedCount: 0,
+        totalRevenue: 0,
+        payLaterRevenue: 0,
+        paidRevenue: 0,
         orders: []
       };
     }
 
+    const amount = Number(po.total_amount || 0);
+
     preordersByDate[dateKey].totalOrders += 1;
     preordersByDate[dateKey].orders.push(po);
+
+    if (po.status !== 'cancelled') {
+      preordersByDate[dateKey].totalRevenue += amount;
+      if (po.payment_method === 'pay_later') {
+        preordersByDate[dateKey].payLaterRevenue += amount;
+      } else {
+        preordersByDate[dateKey].paidRevenue += amount;
+      }
+    }
 
     if (po.status === 'pending') preordersByDate[dateKey].pendingCount += 1;
     if (po.status === 'accepted') preordersByDate[dateKey].acceptedCount += 1;
@@ -270,6 +287,15 @@ export default function BakingCalendar() {
     }
     preordersByDate[dateKey].totalItems += itemCount;
   });
+
+  // Calculate total monthly expected revenue for visible month
+  const totalMonthlyRevenue = Object.entries(preordersByDate).reduce((sum, [dKey, dData]) => {
+    const [y, m] = dKey.split('-').map(Number);
+    if (y === year && (m - 1) === month) {
+      return sum + (dData.totalRevenue || 0);
+    }
+    return sum;
+  }, 0);
 
   // Selected date preorders & aggregated baking summary
   const selectedDateOrders = preordersByDate[selectedDateStr]?.orders || [];
@@ -459,6 +485,11 @@ export default function BakingCalendar() {
                   {/* Badges for Preorders */}
                   {dayData ? (
                     <div className="calendar-cell-indicators">
+                      {dayData.totalRevenue > 0 && (
+                        <div className="calendar-badge" style={{ background: '#fff3e0', color: '#b45309', fontWeight: 'bold' }}>
+                          <span>💰 ฿{dayData.totalRevenue >= 1000 ? `${(dayData.totalRevenue / 1000).toFixed(1)}k` : dayData.totalRevenue.toFixed(0)}</span>
+                        </div>
+                      )}
                       {dayData.pendingCount > 0 && (
                         <div className="calendar-badge" style={{ background: '#ffeaa7', color: '#d63031' }}>
                           <span>⏳ รอรับ: {dayData.pendingCount}</span>
@@ -486,6 +517,47 @@ export default function BakingCalendar() {
 
         {/* RIGHT / BOTTOM: Daily Baking Summary & Orders Breakdown */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+          {/* CARD 0: Money Summary for Selected Date */}
+          <div className="card" style={{ padding: '1.25rem', borderRadius: '16px', background: 'linear-gradient(135deg, #fff7ed 0%, #fff3e0 100%)', border: '1px solid rgba(245, 158, 11, 0.4)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', borderBottom: '1px dashed rgba(245, 158, 11, 0.4)', paddingBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Wallet size={22} color="#d97706" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#b45309', fontWeight: 'bold' }}>
+                  สรุปเงินที่จะได้รับ ({thaiFormattedSelectedDate()})
+                </h3>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#b45309', background: 'rgba(245, 158, 11, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                เดือนนี้รวม ฿{totalMonthlyRevenue.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+              {/* Total Expected Revenue */}
+              <div style={{ background: 'white', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.3)', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>💰 ยอดรวมที่จะได้รับ</div>
+                <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#b45309', marginTop: '0.2rem' }}>
+                  ฿{(preordersByDate[selectedDateStr]?.totalRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              {/* To Collect on Pickup (Pay Later) */}
+              <div style={{ background: 'white', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                <div style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 500 }}>💵 รอเก็บเงินสดตอนรับของ</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#dc2626', marginTop: '0.2rem' }}>
+                  ฿{(preordersByDate[selectedDateStr]?.payLaterRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              {/* Already Paid / Transferred */}
+              <div style={{ background: 'white', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                <div style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 500 }}>💳 โอน/ชำระเงินแล้ว</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#059669', marginTop: '0.2rem' }}>
+                  ฿{(preordersByDate[selectedDateStr]?.paidRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          </div>
           
           {/* CARD 1: Daily Baking Summary (สรุปยอดอบเค้กประจำวัน) */}
           <div className="card" style={{ padding: '1.25rem', borderRadius: '16px', background: 'linear-gradient(135deg, #ffffff 0%, #fff8f9 100%)', border: '1px solid rgba(255, 143, 163, 0.3)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
@@ -605,8 +677,19 @@ export default function BakingCalendar() {
                             <span style={{ fontWeight: 'bold' }}>x{item.quantity}</span>
                           </div>
                         ))}
-                        <div style={{ textAlign: 'right', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary-dark)', marginTop: '0.35rem', borderTop: '1px dashed #eee', paddingTop: '0.25rem' }}>
-                          ยอดรวม: ฿{Number(po.total_amount || 0).toFixed(2)}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'right', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary-dark)', marginTop: '0.35rem', borderTop: '1px dashed #eee', paddingTop: '0.35rem' }}>
+                          <div>
+                            {po.payment_method === 'pay_later' ? (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#dc2626', backgroundColor: '#fee2e2', padding: '2px 8px', borderRadius: '8px' }}>
+                                💵 รอเก็บเงินตอนรับของ
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#059669', backgroundColor: '#d1fae5', padding: '2px 8px', borderRadius: '8px' }}>
+                                💳 ชำระ/โอนเรียบร้อย
+                              </span>
+                            )}
+                          </div>
+                          <div>ยอดรวม: ฿{Number(po.total_amount || 0).toFixed(2)}</div>
                         </div>
                       </div>
 
