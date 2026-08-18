@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2, Image as ImageIcon, CreditCard, Plus, User, Phone, Calendar, X, UploadCloud, MessageSquare, Sparkles, Printer } from 'lucide-react';
+import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2, Image as ImageIcon, CreditCard, Plus, User, Phone, Calendar, X, UploadCloud, MessageSquare, Sparkles, Printer, Cake } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 export default function Preorders() {
