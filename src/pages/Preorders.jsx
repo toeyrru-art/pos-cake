@@ -1064,8 +1064,36 @@ export default function Preorders() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {displayPreorders.map(order => (
-            <div key={order.id} className="card" style={{ padding: '1.5rem' }}>
+          {displayPreorders.map((order, index) => {
+            const prevOrder = index > 0 ? displayPreorders[index - 1] : null;
+            const showDivider = !prevOrder || prevOrder.status !== order.status;
+            
+            const statusTitle = {
+              'pending': '⏳ รอยืนยัน (รอกดรับออร์เดอร์)',
+              'accepted': '👩‍🍳 รับออร์เดอร์แล้ว (รอทำ/กำลังเตรียม)',
+              'prepared': '🎁 จัดขนมแล้ว (พร้อมส่ง/รอรับ)',
+              'completed': '✅ รับขนมแล้ว (เสร็จสิ้น)',
+              'cancelled': '❌ ยกเลิกแล้ว'
+            };
+
+            return (
+              <React.Fragment key={order.id}>
+                {showDivider && (
+                  <div style={{
+                    marginTop: index > 0 ? '1.5rem' : '0.5rem',
+                    marginBottom: '0.5rem',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#f8f9fa',
+                    borderLeft: '4px solid var(--primary-dark)',
+                    borderRadius: '4px',
+                    fontWeight: 'bold',
+                    fontSize: '1.1rem',
+                    color: 'var(--primary-dark)'
+                  }}>
+                    {statusTitle[order.status] || order.status}
+                  </div>
+                )}
+                <div className="card" style={{ padding: '1.5rem' }}>
               <div 
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
                 onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
@@ -1253,6 +1281,7 @@ export default function Preorders() {
                 </div>
               )}
             </div>
+            </React.Fragment>
           ))}
         </div>
       )}
