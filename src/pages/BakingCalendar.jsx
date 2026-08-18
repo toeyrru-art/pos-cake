@@ -87,7 +87,11 @@ export default function BakingCalendar() {
       if (error) throw error;
       fetchData();
     } catch (err) {
-      alert('ไม่สามารถอัปเดตสถานะได้: ' + err.message);
+      if (err.message && err.message.includes('preorders_status_check')) {
+        alert('กรุณารันคำสั่ง SQL ใน Supabase SQL Editor เพื่ออนุญาตสถานะ "จัดขนมแล้ว" ครับ:\n\nALTER TABLE preorders DROP CONSTRAINT IF EXISTS preorders_status_check;');
+      } else {
+        alert('ไม่สามารถอัปเดตสถานะได้: ' + err.message);
+      }
     }
   };
 

@@ -229,7 +229,11 @@ export default function Preorders() {
       .eq('id', order.id);
 
     if (error) {
-      alert(error.message);
+      if (error.message && error.message.includes('preorders_status_check')) {
+        alert('กรุณารันคำสั่ง SQL ใน Supabase SQL Editor เพื่ออนุญาตสถานะ "จัดขนมแล้ว" ครับ:\n\nALTER TABLE preorders DROP CONSTRAINT IF EXISTS preorders_status_check;');
+      } else {
+        alert(error.message);
+      }
     } else {
       // Send Slack notification for status change
       try {
