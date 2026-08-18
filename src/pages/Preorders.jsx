@@ -1282,7 +1282,8 @@ export default function Preorders() {
               )}
             </div>
             </React.Fragment>
-          ))}
+            );
+          })}
         </div>
       )}
 
