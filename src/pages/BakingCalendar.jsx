@@ -253,6 +253,7 @@ export default function BakingCalendar() {
         totalItems: 0,
         pendingCount: 0,
         acceptedCount: 0,
+        preparedCount: 0,
         completedCount: 0,
         totalRevenue: 0,
         payLaterRevenue: 0,
@@ -277,6 +278,7 @@ export default function BakingCalendar() {
 
     if (po.status === 'pending') preordersByDate[dateKey].pendingCount += 1;
     if (po.status === 'accepted') preordersByDate[dateKey].acceptedCount += 1;
+    if (po.status === 'prepared') preordersByDate[dateKey].preparedCount += 1;
     if (po.status === 'completed') preordersByDate[dateKey].completedCount += 1;
 
     let itemCount = 0;
@@ -358,6 +360,7 @@ export default function BakingCalendar() {
               <option value="all">ทั้งหมด</option>
               <option value="pending">รอการยืนยัน (Pending)</option>
               <option value="accepted">รับออร์เดอร์แล้ว (Accepted)</option>
+              <option value="prepared">จัดขนมแล้ว (Prepared)</option>
               <option value="completed">เสร็จสิ้น/รับแล้ว (Completed)</option>
             </select>
           </div>
@@ -500,6 +503,11 @@ export default function BakingCalendar() {
                           <span>👩‍🍳 ทำ: {dayData.acceptedCount}</span>
                         </div>
                       )}
+                      {dayData.preparedCount > 0 && (
+                        <div className="calendar-badge" style={{ background: '#e9d5ff', color: '#7e22ce' }}>
+                          <span>🎁 จัดแล้ว: {dayData.preparedCount}</span>
+                        </div>
+                      )}
                       {dayData.completedCount > 0 && (
                         <div className="calendar-badge" style={{ background: '#55efc4', color: '#00b894' }}>
                           <span>✅ รับ: {dayData.completedCount}</span>
@@ -617,6 +625,8 @@ export default function BakingCalendar() {
                         return <span style={{ background: '#ffeaa7', color: '#d63031', fontSize: '0.75rem', fontWeight: 'bold', padding: '3px 8px', borderRadius: '12px' }}>⏳ รอการยืนยัน</span>;
                       case 'accepted':
                         return <span style={{ background: '#74b9ff', color: '#0984e3', fontSize: '0.75rem', fontWeight: 'bold', padding: '3px 8px', borderRadius: '12px' }}>👩‍🍳 รับออร์เดอร์แล้ว</span>;
+                      case 'prepared':
+                        return <span style={{ background: '#e9d5ff', color: '#7e22ce', fontSize: '0.75rem', fontWeight: 'bold', padding: '3px 8px', borderRadius: '12px' }}>🎁 จัดขนมแล้ว</span>;
                       case 'completed':
                         return <span style={{ background: '#55efc4', color: '#00b894', fontSize: '0.75rem', fontWeight: 'bold', padding: '3px 8px', borderRadius: '12px' }}>✅ เสร็จสิ้น/รับแล้ว</span>;
                       case 'cancelled':
@@ -709,6 +719,15 @@ export default function BakingCalendar() {
                             style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', color: '#0984e3', borderColor: '#74b9ff', borderRadius: '6px' }}
                           >
                             <CheckCircle size={13} /> รับออร์เดอร์
+                          </button>
+                        )}
+                        {(po.status === 'accepted' || po.status === 'pending') && (
+                          <button 
+                            onClick={() => handleUpdateStatus(po.id, 'prepared')}
+                            className="btn btn-outline"
+                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', color: '#7e22ce', borderColor: '#c084fc', borderRadius: '6px' }}
+                          >
+                            <Cake size={13} /> จัดขนมแล้ว
                           </button>
                         )}
                         {po.status !== 'completed' && po.status !== 'cancelled' && (

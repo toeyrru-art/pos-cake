@@ -115,8 +115,9 @@ export default function Preorders() {
       const statusPriority = {
         pending: 1,
         accepted: 2,
-        completed: 3,
-        cancelled: 4
+        prepared: 3,
+        completed: 4,
+        cancelled: 5
       };
 
       preorderData.sort((a, b) => {
@@ -242,6 +243,7 @@ export default function Preorders() {
         if (webhookUrl) {
           let statusText = newStatus;
           if (newStatus === 'accepted') statusText = 'รับออร์เดอร์แล้ว';
+          if (newStatus === 'prepared') statusText = 'จัดขนมแล้ว (พร้อมส่ง/พร้อมรับ)';
           if (newStatus === 'completed') statusText = 'ลูกค้ารับขนมแล้ว (เสร็จสิ้น)';
           if (newStatus === 'pending') statusText = 'รอยืนยัน';
 
@@ -757,6 +759,8 @@ export default function Preorders() {
         return <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={14} /> รอยืนยัน</span>;
       case 'accepted':
         return <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#2563eb', padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><CheckCircle size={14} /> รับออร์เดอร์แล้ว</span>;
+      case 'prepared':
+        return <span style={{ backgroundColor: 'rgba(147, 51, 234, 0.15)', color: '#9333ea', padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Cake size={14} /> จัดขนมแล้ว</span>;
       case 'completed':
         return <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#059669', padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><PackageCheck size={14} /> รับขนมแล้ว</span>;
       case 'cancelled':
@@ -767,7 +771,7 @@ export default function Preorders() {
   };
 
   const displayPreorders = preorders.filter(order => {
-    if (activeTab === 'active') return order.status === 'pending' || order.status === 'accepted';
+    if (activeTab === 'active') return order.status === 'pending' || order.status === 'accepted' || order.status === 'prepared';
     return order.status === 'completed' || order.status === 'cancelled';
   });
 
@@ -1142,19 +1146,41 @@ export default function Preorders() {
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <button 
                         className="btn btn-outline" 
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ 
+                          fontSize: '0.85rem',
+                          backgroundColor: order.status === 'pending' ? 'var(--primary-light)' : 'transparent',
+                          borderColor: order.status === 'pending' ? 'var(--primary-dark)' : 'var(--border)'
+                        }}
                         onClick={() => updateStatus(order, 'pending')}
                         disabled={order.status === 'pending'}
                       >
                         รอยืนยัน
                       </button>
                       <button 
-                        className="btn btn-primary" 
-                        style={{ fontSize: '0.85rem' }}
+                        className="btn btn-outline" 
+                        style={{ 
+                          fontSize: '0.85rem',
+                          backgroundColor: order.status === 'accepted' ? '#eff6ff' : 'transparent',
+                          borderColor: order.status === 'accepted' ? '#2563eb' : 'var(--border)',
+                          color: order.status === 'accepted' ? '#2563eb' : 'inherit'
+                        }}
                         onClick={() => updateStatus(order, 'accepted')}
                         disabled={order.status === 'accepted'}
                       >
                         รับออร์เดอร์แล้ว
+                      </button>
+                      <button 
+                        className="btn btn-outline" 
+                        style={{ 
+                          fontSize: '0.85rem',
+                          backgroundColor: order.status === 'prepared' ? '#f3e8ff' : 'transparent',
+                          borderColor: order.status === 'prepared' ? '#9333ea' : 'var(--border)',
+                          color: order.status === 'prepared' ? '#9333ea' : 'inherit'
+                        }}
+                        onClick={() => updateStatus(order, 'prepared')}
+                        disabled={order.status === 'prepared'}
+                      >
+                        จัดขนมแล้ว
                       </button>
                       <button 
                         className="btn btn-success" 
