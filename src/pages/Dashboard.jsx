@@ -106,8 +106,7 @@ export default function Dashboard() {
       
       const topSellers = Object.keys(sellerMap)
         .map(key => ({ name: key, sales: sellerMap[key] }))
-        .sort((a, b) => b.sales - a.sales)
-        .slice(0, 5);
+        .sort((a, b) => b.sales - a.sales);
 
       // Store settings
       try {
@@ -461,7 +460,7 @@ export default function Dashboard() {
         {/* Top Sellers */}
         <div className="card" style={{ flex: '1 1 35%', minWidth: '300px' }}>
           <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
-            <TrendingUp size={20} /> สินค้าขายดี 5 อันดับแรก
+            <TrendingUp size={20} /> ยอดขายสินค้าทั้งหมด
           </h4>
           {stats.topSellers.length === 0 ? (
             <div className="text-center text-muted" style={{ padding: '2rem 0' }}>ยังไม่มีข้อมูลการขาย</div>
