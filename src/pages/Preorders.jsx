@@ -17,6 +17,7 @@ export default function Preorders() {
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('active'); // 'active', 'history'
+  const [historySortBy, setHistorySortBy] = useState('date'); // 'date', 'customer'
   const [orderSource, setOrderSource] = useState('Facebook'); // 'Facebook', 'LINE', 'โทรสั่ง', 'หน้าร้าน'
   
   const [rawChatText, setRawChatText] = useState('');
@@ -186,6 +187,21 @@ export default function Preorders() {
       });
     } catch (err) {
       console.log('Slack Notification Error:', err);
+    }
+  };
+
+  const updatePaymentMethod = async (orderId, method) => {
+    try {
+      const { error } = await supabase
+        .from('preorders')
+        .update({ payment_method: method })
+        .eq('id', orderId);
+        
+      if (error) throw error;
+      
+      setPreorders(preorders.map(o => o.id === orderId ? { ...o, payment_method: method } : o));
+    } catch (e) {
+      alert('Error updating payment method: ' + e.message);
     }
   };
 
@@ -774,10 +790,14 @@ export default function Preorders() {
     }
   };
 
-  const displayPreorders = preorders.filter(order => {
+  let displayPreorders = preorders.filter(order => {
     if (activeTab === 'active') return order.status === 'pending' || order.status === 'accepted' || order.status === 'prepared';
     return order.status === 'completed' || order.status === 'cancelled';
   });
+
+  if (activeTab === 'history' && historySortBy === 'customer') {
+    displayPreorders = [...displayPreorders].sort((a, b) => a.customer_name.localeCompare(b.customer_name, 'th'));
+  }
 
   return (
     <div>
@@ -826,6 +846,20 @@ export default function Preorders() {
           ประวัติ (รับแล้ว/ยกเลิก)
         </button>
       </div>
+
+      {activeTab === 'history' && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem', marginTop: '-0.5rem' }}>
+          <select 
+            value={historySortBy} 
+            onChange={(e) => setHistorySortBy(e.target.value)}
+            className="premium-input"
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', width: 'auto', borderRadius: '20px' }}
+          >
+            <option value="date">เรียงตามวันที่ล่าสุด</option>
+            <option value="customer">จัดกลุ่มตามลูกค้า</option>
+          </select>
+        </div>
+      )}
 
       {/* Manual Preorder Entry Modal */}
       {isCreateModalOpen && createPortal(
@@ -1066,15 +1100,23 @@ export default function Preorders() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {displayPreorders.map((order, index) => {
             const prevOrder = index > 0 ? displayPreorders[index - 1] : null;
-            const showDivider = !prevOrder || prevOrder.status !== order.status;
+            let showDivider = false;
+            let dividerContent = null;
             
-            const statusTitle = {
-              'pending': '⏳ รอยืนยัน (รอกดรับออร์เดอร์)',
-              'accepted': '👩‍🍳 รับออร์เดอร์แล้ว (รอทำ/กำลังเตรียม)',
-              'prepared': '🎁 จัดขนมแล้ว (พร้อมส่ง/รอรับ)',
-              'completed': '✅ รับขนมแล้ว (เสร็จสิ้น)',
-              'cancelled': '❌ ยกเลิกแล้ว'
-            };
+            if (activeTab === 'active') {
+              showDivider = !prevOrder || prevOrder.status !== order.status;
+              const statusTitle = {
+                'pending': '⏳ รอยืนยัน (รอกดรับออร์เดอร์)',
+                'accepted': '👩‍🍳 รับออร์เดอร์แล้ว (รอทำ/กำลังเตรียม)',
+                'prepared': '🎁 จัดขนมแล้ว (พร้อมส่ง/รอรับ)',
+                'completed': '✅ รับขนมแล้ว (เสร็จสิ้น)',
+                'cancelled': '❌ ยกเลิกแล้ว'
+              };
+              dividerContent = statusTitle[order.status] || order.status;
+            } else if (activeTab === 'history' && historySortBy === 'customer') {
+              showDivider = !prevOrder || prevOrder.customer_name !== order.customer_name;
+              dividerContent = `👤 ลูกค้า: ${formatDisplayName(order.customer_name)} (${displayPreorders.filter(o => o.customer_name === order.customer_name).length} ออร์เดอร์)`;
+            }
 
             return (
               <React.Fragment key={order.id}>
@@ -1090,7 +1132,7 @@ export default function Preorders() {
                     fontSize: '1.1rem',
                     color: 'var(--primary-dark)'
                   }}>
-                    {statusTitle[order.status] || order.status}
+                    {dividerContent}
                   </div>
                 )}
                 <div className="card" style={{ padding: '1.5rem' }}>
@@ -1103,9 +1145,9 @@ export default function Preorders() {
                   <div className="text-muted" style={{ fontSize: '0.9rem' }}>
                     เบอร์โทร: {order.customer_phone} &bull; วันรับ: {new Date(order.pickup_date).toLocaleString('th-TH')}
                   </div>
-                  <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.25rem', color: order.payment_method === 'pay_later' ? '#d97706' : 'var(--primary-dark)' }}>
+                  <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.25rem', color: order.payment_method === 'pay_later' ? '#d97706' : order.payment_method === 'cash' ? '#166534' : 'var(--primary-dark)' }}>
                     <CreditCard size={14} /> 
-                    {order.payment_method === 'pay_later' ? 'วิธีชำระ: จ่ายเงินตอนรับของ (Pay Later)' : 'วิธีชำระ: โอนเงิน'}
+                    {order.payment_method === 'pay_later' ? 'วิธีชำระ: จ่ายเงินตอนรับของ (ยังไม่บันทึก)' : order.payment_method === 'cash' ? 'วิธีชำระ: 💵 จ่ายเงินสดแล้ว' : 'วิธีชำระ: 📱 โอนเงินแล้ว'}
                     
                     {order.payment_method !== 'pay_later' && order.slip_url && (
                       <button 
@@ -1253,6 +1295,38 @@ export default function Preorders() {
                         รับขนมแล้ว
                       </button>
                     </div>
+
+                    {activeTab === 'history' && order.status === 'completed' && (
+                      <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px dashed #4ade80', marginBottom: '1.5rem' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#166534', fontSize: '0.9rem' }}>บันทึกการรับเงิน:</div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button 
+                            className="btn btn-outline"
+                            style={{ 
+                              backgroundColor: order.payment_method === 'cash' ? '#22c55e' : 'transparent',
+                              color: order.payment_method === 'cash' ? 'white' : '#166534',
+                              borderColor: '#22c55e',
+                              fontSize: '0.85rem'
+                            }}
+                            onClick={() => updatePaymentMethod(order.id, 'cash')}
+                          >
+                            💵 จ่ายเงินสด
+                          </button>
+                          <button 
+                            className="btn btn-outline"
+                            style={{ 
+                              backgroundColor: order.payment_method === 'transfer' ? '#3b82f6' : 'transparent',
+                              color: order.payment_method === 'transfer' ? 'white' : '#1e3a8a',
+                              borderColor: '#3b82f6',
+                              fontSize: '0.85rem'
+                            }}
+                            onClick={() => updatePaymentMethod(order.id, 'transfer')}
+                          >
+                            📱 โอนเงิน
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <button 
