@@ -24,19 +24,28 @@ export default function Dashboard() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   
-  const [salesDateFilter, setSalesDateFilter] = useState('');
-  const [salesProductFilter, setSalesProductFilter] = useState('');
+  const [salesDateStart, setSalesDateStart] = useState('');
+  const [salesDateEnd, setSalesDateEnd] = useState('');
+  const [salesProductFilters, setSalesProductFilters] = useState([]);
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [rawSaleItems, setRawSaleItems] = useState([]);
   const [productList, setProductList] = useState([]);
   const [filteredTopSellers, setFilteredTopSellers] = useState([]);
 
   useEffect(() => {
     let filtered = rawSaleItems;
-    if (salesDateFilter) {
-      filtered = filtered.filter(item => item.created_at && item.created_at.startsWith(salesDateFilter));
+    if (salesDateStart) {
+      const startDate = new Date(salesDateStart);
+      startDate.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(item => new Date(item.created_at) >= startDate);
     }
-    if (salesProductFilter) {
-      filtered = filtered.filter(item => item.products?.name === salesProductFilter);
+    if (salesDateEnd) {
+      const endDate = new Date(salesDateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(item => new Date(item.created_at) <= endDate);
+    }
+    if (salesProductFilters.length > 0) {
+      filtered = filtered.filter(item => salesProductFilters.includes(item.products?.name));
     }
     
     const sellerMap = {};
@@ -50,7 +59,7 @@ export default function Dashboard() {
       .sort((a, b) => b.sales - a.sales);
       
     setFilteredTopSellers(topSellers);
-  }, [rawSaleItems, salesDateFilter, salesProductFilter]);
+  }, [rawSaleItems, salesDateStart, salesDateEnd, salesProductFilters]);
 
   useEffect(() => {
     async function fetchStats() {
@@ -484,25 +493,59 @@ export default function Dashboard() {
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', color: 'var(--primary-dark)', margin: 0 }}>
               <TrendingUp size={20} /> ยอดขายสินค้าทั้งหมด
             </h4>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <input 
-                type="date" 
-                className="premium-input" 
-                value={salesDateFilter}
-                onChange={(e) => setSalesDateFilter(e.target.value)}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px' }}
-              />
-              <select 
-                className="premium-input"
-                value={salesProductFilter}
-                onChange={(e) => setSalesProductFilter(e.target.value)}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px' }}
-              >
-                <option value="">ทุกสินค้า</option>
-                {productList.map((p, i) => (
-                  <option key={i} value={p}>{p}</option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <input 
+                  type="date" 
+                  className="premium-input" 
+                  value={salesDateStart}
+                  onChange={(e) => setSalesDateStart(e.target.value)}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px', maxWidth: '130px' }}
+                />
+                <span style={{ color: 'var(--text-muted)' }}>-</span>
+                <input 
+                  type="date" 
+                  className="premium-input" 
+                  value={salesDateEnd}
+                  onChange={(e) => setSalesDateEnd(e.target.value)}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px', maxWidth: '130px' }}
+                />
+              </div>
+              <div style={{ position: 'relative' }}>
+                <button 
+                  onClick={() => setIsProductDropdownOpen(!isProductDropdownOpen)}
+                  className="premium-input"
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px', backgroundColor: 'white', textAlign: 'left', minWidth: '150px', cursor: 'pointer' }}
+                >
+                  {salesProductFilters.length === 0 ? 'ทุกสินค้า' : `เลือกแล้ว ${salesProductFilters.length} รายการ`}
+                </button>
+                {isProductDropdownOpen && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem', backgroundColor: 'white', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: 'var(--shadow-md)', zIndex: 10, minWidth: '200px', maxHeight: '250px', overflowY: 'auto' }}>
+                    <div 
+                      style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontWeight: 'bold' }}
+                      onClick={() => setSalesProductFilters([])}
+                    >
+                      ล้างตัวเลือก (ทุกสินค้า)
+                    </div>
+                    {productList.map((p, i) => (
+                      <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={salesProductFilters.includes(p)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSalesProductFilters([...salesProductFilters, p]);
+                            } else {
+                              setSalesProductFilters(salesProductFilters.filter(item => item !== p));
+                            }
+                          }}
+                        />
+                        <span style={{ fontSize: '0.9rem' }}>{p}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           {filteredTopSellers.length === 0 ? (
