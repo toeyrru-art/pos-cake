@@ -23,6 +23,34 @@ export default function Dashboard() {
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  
+  const [salesDateFilter, setSalesDateFilter] = useState('');
+  const [salesProductFilter, setSalesProductFilter] = useState('');
+  const [rawSaleItems, setRawSaleItems] = useState([]);
+  const [productList, setProductList] = useState([]);
+  const [filteredTopSellers, setFilteredTopSellers] = useState([]);
+
+  useEffect(() => {
+    let filtered = rawSaleItems;
+    if (salesDateFilter) {
+      filtered = filtered.filter(item => item.created_at && item.created_at.startsWith(salesDateFilter));
+    }
+    if (salesProductFilter) {
+      filtered = filtered.filter(item => item.products?.name === salesProductFilter);
+    }
+    
+    const sellerMap = {};
+    filtered.forEach(item => {
+      const pName = item.products?.name || 'Unknown';
+      sellerMap[pName] = (sellerMap[pName] || 0) + item.quantity;
+    });
+    
+    const topSellers = Object.keys(sellerMap)
+      .map(key => ({ name: key, sales: sellerMap[key] }))
+      .sort((a, b) => b.sales - a.sales);
+      
+    setFilteredTopSellers(topSellers);
+  }, [rawSaleItems, salesDateFilter, salesProductFilter]);
 
   useEffect(() => {
     async function fetchStats() {
@@ -91,22 +119,16 @@ export default function Dashboard() {
       // Convert finance map to array (oldest to newest)
       const financeData = Object.keys(financeMap).reverse().map(key => financeMap[key]);
 
-      // Top Sellers
+      // Top Sellers (now fetched with created_at for filtering)
       const { data: saleItemsData } = await supabase
         .from('sale_items')
-        .select('quantity, products(name)');
+        .select('quantity, created_at, products(name)');
         
-      const sellerMap = {};
       if (saleItemsData) {
-        saleItemsData.forEach(item => {
-          const pName = item.products?.name || 'Unknown';
-          sellerMap[pName] = (sellerMap[pName] || 0) + item.quantity;
-        });
+        setRawSaleItems(saleItemsData);
+        const uniqueProducts = Array.from(new Set(saleItemsData.map(item => item.products?.name).filter(Boolean))).sort();
+        setProductList(uniqueProducts);
       }
-      
-      const topSellers = Object.keys(sellerMap)
-        .map(key => ({ name: key, sales: sellerMap[key] }))
-        .sort((a, b) => b.sales - a.sales);
 
       // Store settings
       try {
@@ -132,7 +154,6 @@ export default function Dashboard() {
         salesToday: salesCount,
         incomeToday: income,
         financeData,
-        topSellers,
         totalIncome7Days,
         totalExpense7Days,
         totalProfit7Days: totalIncome7Days - totalExpense7Days
@@ -459,14 +480,36 @@ export default function Dashboard() {
 
         {/* Top Sellers */}
         <div className="card" style={{ flex: '1 1 35%', minWidth: '300px' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
-            <TrendingUp size={20} /> ยอดขายสินค้าทั้งหมด
-          </h4>
-          {stats.topSellers.length === 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', color: 'var(--primary-dark)', margin: 0 }}>
+              <TrendingUp size={20} /> ยอดขายสินค้าทั้งหมด
+            </h4>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <input 
+                type="date" 
+                className="premium-input" 
+                value={salesDateFilter}
+                onChange={(e) => setSalesDateFilter(e.target.value)}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px' }}
+              />
+              <select 
+                className="premium-input"
+                value={salesProductFilter}
+                onChange={(e) => setSalesProductFilter(e.target.value)}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px' }}
+              >
+                <option value="">ทุกสินค้า</option>
+                {productList.map((p, i) => (
+                  <option key={i} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {filteredTopSellers.length === 0 ? (
             <div className="text-center text-muted" style={{ padding: '2rem 0' }}>ยังไม่มีข้อมูลการขาย</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {stats.topSellers.map((item, index) => (
+              {filteredTopSellers.map((item, index) => (
                 <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--primary-light)', borderRadius: '8px' }}>
                   <div style={{ width: '28px', height: '28px', backgroundColor: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'var(--primary-dark)' }}>
                     {index + 1}
