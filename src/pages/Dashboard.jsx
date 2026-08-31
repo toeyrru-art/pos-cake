@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { Cake, ShoppingCart, DollarSign, Store as StoreIcon, BarChart3, TrendingUp, Calendar, Settings, X } from 'lucide-react';
+import { Cake, ShoppingCart, DollarSign, Store as StoreIcon, BarChart3, TrendingUp, Calendar, Settings, X, ChevronDown, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -493,45 +493,72 @@ export default function Dashboard() {
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', color: 'var(--primary-dark)', margin: 0 }}>
               <TrendingUp size={20} /> ยอดขายสินค้าทั้งหมด
             </h4>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              
+              {/* Date Range Picker */}
+              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f8f9fa', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.2rem 0.5rem' }}>
                 <input 
                   type="date" 
-                  className="premium-input" 
                   value={salesDateStart}
                   onChange={(e) => setSalesDateStart(e.target.value)}
-                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px', maxWidth: '130px' }}
+                  style={{ border: 'none', backgroundColor: 'transparent', outline: 'none', padding: '0.4rem', fontSize: '0.85rem', color: 'var(--primary-dark)', cursor: 'pointer' }}
                 />
-                <span style={{ color: 'var(--text-muted)' }}>-</span>
+                <span style={{ color: '#cbd5e1', margin: '0 0.25rem' }}>-</span>
                 <input 
                   type="date" 
-                  className="premium-input" 
                   value={salesDateEnd}
                   onChange={(e) => setSalesDateEnd(e.target.value)}
-                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px', maxWidth: '130px' }}
+                  style={{ border: 'none', backgroundColor: 'transparent', outline: 'none', padding: '0.4rem', fontSize: '0.85rem', color: 'var(--primary-dark)', cursor: 'pointer' }}
                 />
               </div>
+
+              {/* Product Multi-select */}
               <div style={{ position: 'relative' }}>
                 <button 
                   onClick={() => setIsProductDropdownOpen(!isProductDropdownOpen)}
-                  className="premium-input"
-                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', borderRadius: '8px', backgroundColor: 'white', textAlign: 'left', minWidth: '150px', cursor: 'pointer' }}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    padding: '0.5rem 1rem', fontSize: '0.9rem', borderRadius: '10px', 
+                    backgroundColor: salesProductFilters.length > 0 ? 'var(--primary-light)' : 'white', 
+                    border: salesProductFilters.length > 0 ? '1px solid var(--primary-dark)' : '1px solid #e2e8f0',
+                    color: salesProductFilters.length > 0 ? 'var(--primary-dark)' : '#64748b',
+                    cursor: 'pointer', transition: 'all 0.2s', minWidth: '160px', justifyContent: 'space-between'
+                  }}
                 >
-                  {salesProductFilters.length === 0 ? 'ทุกสินค้า' : `เลือกแล้ว ${salesProductFilters.length} รายการ`}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Filter size={16} />
+                    {salesProductFilters.length === 0 ? 'ทุกสินค้า' : `เลือกแล้ว ${salesProductFilters.length}`}
+                  </div>
+                  <ChevronDown size={16} style={{ opacity: 0.6 }} />
                 </button>
+                
                 {isProductDropdownOpen && (
-                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem', backgroundColor: 'white', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: 'var(--shadow-md)', zIndex: 10, minWidth: '200px', maxHeight: '250px', overflowY: 'auto' }}>
+                  <div style={{ 
+                    position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', 
+                    backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', 
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                    zIndex: 20, minWidth: '220px', maxHeight: '300px', overflowY: 'auto' 
+                  }}>
                     <div 
-                      style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontWeight: 'bold' }}
-                      onClick={() => setSalesProductFilters([])}
+                      style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--primary-dark)', display: 'flex', justifyContent: 'center' }}
+                      onClick={() => { setSalesProductFilters([]); setIsProductDropdownOpen(false); }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
                     >
-                      ล้างตัวเลือก (ทุกสินค้า)
+                      ล้างตัวเลือกทั้งหมด
                     </div>
                     {productList.map((p, i) => (
-                      <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                      <label key={i} style={{ 
+                        display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', 
+                        cursor: 'pointer', borderBottom: '1px solid #f8f9fa', transition: 'background-color 0.1s' 
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
                         <input 
                           type="checkbox" 
                           checked={salesProductFilters.includes(p)}
+                          style={{ accentColor: 'var(--primary-dark)', width: '16px', height: '16px', cursor: 'pointer' }}
                           onChange={(e) => {
                             if (e.target.checked) {
                               setSalesProductFilters([...salesProductFilters, p]);
@@ -540,7 +567,7 @@ export default function Dashboard() {
                             }
                           }}
                         />
-                        <span style={{ fontSize: '0.9rem' }}>{p}</span>
+                        <span style={{ fontSize: '0.9rem', color: '#334155' }}>{p}</span>
                       </label>
                     ))}
                   </div>
