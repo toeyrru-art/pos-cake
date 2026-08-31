@@ -51,11 +51,13 @@ export default function Dashboard() {
     const sellerMap = {};
     filtered.forEach(item => {
       const pName = item.products?.name || 'Unknown';
-      sellerMap[pName] = (sellerMap[pName] || 0) + item.quantity;
+      if (!sellerMap[pName]) sellerMap[pName] = { quantity: 0, revenue: 0 };
+      sellerMap[pName].quantity += item.quantity;
+      sellerMap[pName].revenue += (item.quantity * (item.price_at_time || 0));
     });
     
     const topSellers = Object.keys(sellerMap)
-      .map(key => ({ name: key, sales: sellerMap[key] }))
+      .map(key => ({ name: key, sales: sellerMap[key].quantity, revenue: sellerMap[key].revenue }))
       .sort((a, b) => b.sales - a.sales);
       
     setFilteredTopSellers(topSellers);
@@ -131,7 +133,7 @@ export default function Dashboard() {
       // Top Sellers (now fetched with created_at for filtering)
       const { data: saleItemsData } = await supabase
         .from('sale_items')
-        .select('quantity, created_at, products(name)');
+        .select('quantity, price_at_time, created_at, products(name)');
         
       if (saleItemsData) {
         setRawSaleItems(saleItemsData);
@@ -585,9 +587,27 @@ export default function Dashboard() {
                     {index + 1}
                   </div>
                   <div style={{ flex: 1, fontWeight: 500 }}>{item.name}</div>
-                  <div style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>{item.sales} ชิ้น</div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>{item.sales} ชิ้น</div>
+                    {item.revenue > 0 && <div style={{ fontSize: '0.8rem', color: '#64748b' }}>฿{item.revenue.toLocaleString()}</div>}
+                  </div>
                 </div>
               ))}
+              
+              <div style={{ 
+                marginTop: '0.5rem', paddingTop: '1rem', borderTop: '2px dashed #e2e8f0', 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold' 
+              }}>
+                <div style={{ color: '#334155' }}>รวมยอดขายทั้งหมด:</div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: 'var(--primary-dark)', fontSize: '1.1rem' }}>
+                    {filteredTopSellers.reduce((sum, item) => sum + item.sales, 0)} ชิ้น
+                  </div>
+                  <div style={{ color: 'var(--success)', fontSize: '1.1rem' }}>
+                    ฿{filteredTopSellers.reduce((sum, item) => sum + item.revenue, 0).toLocaleString()}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
