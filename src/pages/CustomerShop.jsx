@@ -767,11 +767,11 @@ export default function CustomerShop() {
           
           {loading ? (
             <p className="text-center text-muted">กำลังโหลดเมนู...</p>
-          ) : products.length === 0 ? (
-            <p className="text-center text-muted">ขออภัย ยังไม่มีเมนูเปิดรับพรีออร์เดอร์ในขณะนี้</p>
+          ) : products.filter(p => p.is_active !== false && p.remaining > 0).length === 0 ? (
+            <p className="text-center text-muted">ขออภัย สินค้าถูกจองเต็มหรือปิดรับออร์เดอร์ทั้งหมดในขณะนี้</p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
-              {products.map(p => {
+              {products.filter(p => p.is_active !== false && p.remaining > 0).map(p => {
                 const flavorList = p.flavors ? p.flavors.split(',').map(f => f.trim()).filter(Boolean) : [];
                 const currentFlavor = selectedFlavors[p.id] || (flavorList[0] || '');
 
