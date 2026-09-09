@@ -54,16 +54,10 @@ export default function POS() {
     }
 
     let preorderQuery = supabase.from('preorder_items')
-      .select('product_id, quantity, preorders!inner(status, pickup_date)');
-
-    if (pMode === 'fixed' && fDate) {
-      preorderQuery = preorderQuery
-        .in('preorders.status', ['pending', 'accepted', 'completed'])
-        .gte('preorders.pickup_date', `${fDate}`)
-        .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
-    } else {
-      preorderQuery = preorderQuery.in('preorders.status', ['pending', 'accepted']);
-    }
+      .select('product_id, quantity, preorders!inner(status, pickup_date)')
+      .in('preorders.status', ['pending', 'accepted', 'completed'])
+      .gte('preorders.pickup_date', `${fDate}`)
+      .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
 
     const saleQuery = supabase.from('sale_items')
       .select('product_id, quantity, created_at')
