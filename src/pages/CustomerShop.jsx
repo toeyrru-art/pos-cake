@@ -116,12 +116,37 @@ export default function CustomerShop() {
 
   const fetchData = async () => {
     setLoading(true);
+
+    const { data: settingsData } = await supabase
+      .from('store_settings')
+      .select('key, value')
+      .in('key', ['pickup_date_mode', 'fixed_pickup_date']);
+
+    let pMode = 'customer';
+    let fDate = '';
+    if (settingsData) {
+      settingsData.forEach(setting => {
+        if (setting.key === 'pickup_date_mode') pMode = setting.value;
+        if (setting.key === 'fixed_pickup_date') fDate = setting.value;
+      });
+    }
+
+    let preorderQuery = supabase.from('preorder_items')
+      .select('product_id, quantity, preorders!inner(status, pickup_date)');
+
+    if (pMode === 'fixed' && fDate) {
+      preorderQuery = preorderQuery
+        .in('preorders.status', ['pending', 'accepted', 'completed'])
+        .gte('preorders.pickup_date', `${fDate}`)
+        .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
+    } else {
+      preorderQuery = preorderQuery.in('preorders.status', ['pending', 'accepted']);
+    }
+
     const [prodRes, promoRes, preRes] = await Promise.all([
       supabase.from('products').select('*').order('name'),
       supabase.from('product_promotions').select('*').eq('is_active', true),
-      supabase.from('preorder_items')
-        .select('product_id, quantity, preorders!inner(status)')
-        .in('preorders.status', ['pending', 'accepted'])
+      preorderQuery
     ]);
 
     const activePreorders = preRes.data;
