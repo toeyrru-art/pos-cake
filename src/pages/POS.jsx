@@ -32,13 +32,77 @@ export default function POS() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [prodRes, promoRes] = await Promise.all([
+
+    const { data: settingsData } = await supabase
+      .from('store_settings')
+      .select('key, value')
+      .in('key', ['pickup_date_mode', 'fixed_pickup_date']);
+
+    let pMode = 'customer';
+    let fDate = '';
+    if (settingsData) {
+      settingsData.forEach(setting => {
+        if (setting.key === 'pickup_date_mode') pMode = setting.value;
+        if (setting.key === 'fixed_pickup_date') fDate = setting.value;
+      });
+    }
+
+    // Default to today if not fixed
+    if (!fDate) {
+      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+      fDate = new Date(Date.now() - tzoffset).toISOString().split('T')[0];
+    }
+
+    let preorderQuery = supabase.from('preorder_items')
+      .select('product_id, quantity, preorders!inner(status, pickup_date)');
+
+    if (pMode === 'fixed' && fDate) {
+      preorderQuery = preorderQuery
+        .in('preorders.status', ['pending', 'accepted', 'completed'])
+        .gte('preorders.pickup_date', `${fDate}`)
+        .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
+    } else {
+      preorderQuery = preorderQuery.in('preorders.status', ['pending', 'accepted']);
+    }
+
+    const saleQuery = supabase.from('sale_items')
+      .select('product_id, quantity, created_at')
+      .gte('created_at', `${fDate}T00:00:00`)
+      .lt('created_at', `${fDate}T23:59:59.999Z`);
+
+    const [prodRes, promoRes, preRes, saleRes] = await Promise.all([
       supabase.from('products').select('*').order('name'),
-      supabase.from('product_promotions').select('*').eq('is_active', true)
+      supabase.from('product_promotions').select('*').eq('is_active', true),
+      preorderQuery,
+      saleQuery
     ]);
     
-    if (prodRes.data) setProducts(prodRes.data);
     if (promoRes.data) setProductPromotions(promoRes.data);
+
+    const reservedCounts = {};
+    if (preRes.data) {
+      preRes.data.forEach(item => {
+        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
+      });
+    }
+    if (saleRes.data) {
+      saleRes.data.forEach(item => {
+        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
+      });
+    }
+
+    if (prodRes.data) {
+      const productsWithLimits = prodRes.data.map(p => {
+        if (p.preorder_limit === null || p.preorder_limit === undefined) {
+          return { ...p, remaining: Infinity };
+        }
+        const reserved = reservedCounts[p.id] || 0;
+        const remaining = Math.max(0, p.preorder_limit - reserved);
+        return { ...p, remaining };
+      });
+      setProducts(productsWithLimits);
+    }
+
     setLoading(false);
   };
 
@@ -47,6 +111,17 @@ export default function POS() {
     const flavor = flavorList.length > 0 ? (selectedFlavors[product.id] || flavorList[0]) : null;
 
     const existing = cart.find(item => item.product.id === product.id && item.flavor === flavor);
+    
+    // Check limit across all flavors of the same product in cart
+    const currentTotalQ = cart
+      .filter(item => item.product.id === product.id)
+      .reduce((sum, item) => sum + item.quantity, 0);
+
+    if (currentTotalQ >= product.remaining) {
+      alert(`ขออภัย สินค้านี้สั่งได้สูงสุด ${product.remaining} ชิ้นครับ`);
+      return;
+    }
+
     if (existing) {
       setCart(cart.map(item => 
         (item.product.id === product.id && item.flavor === flavor)
@@ -62,6 +137,15 @@ export default function POS() {
     setCart(cart.map(item => {
       if (item.product.id === productId && item.flavor === flavor) {
         const newQ = item.quantity + delta;
+        if (delta > 0) {
+          const currentTotalQ = cart
+            .filter(c => c.product.id === productId)
+            .reduce((sum, c) => sum + c.quantity, 0);
+          if (currentTotalQ >= item.product.remaining) {
+            alert(`ขออภัย สินค้านี้สั่งได้สูงสุด ${item.product.remaining} ชิ้นครับ`);
+            return item;
+          }
+        }
         return newQ > 0 ? { ...item, quantity: newQ } : item;
       }
       return item;
@@ -330,9 +414,14 @@ export default function POS() {
                   )}
                   <div>
                     <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem' }}>{p.name}</div>
-                    <div style={{ color: 'var(--primary-dark)', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                    <div style={{ color: 'var(--primary-dark)', fontWeight: 'bold', marginBottom: '0.25rem' }}>
                       ฿{(p.selling_price + getFlavorPriceAddOn(currentFlavor)).toFixed(2)}
                     </div>
+                    {p.remaining !== Infinity && (
+                      <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: p.remaining > 0 ? 'var(--text-muted)' : 'var(--danger)', fontWeight: p.remaining <= 0 ? 'bold' : 'normal' }}>
+                        {p.remaining > 0 ? `เหลืออีก ${p.remaining} ชิ้น` : 'สินค้าหมดโควต้า'}
+                      </div>
+                    )}
 
                     {/* Flavor Selection Pills */}
                     {flavorList.length > 0 && (
@@ -372,10 +461,11 @@ export default function POS() {
                   
                   <button 
                     className="btn btn-outline" 
-                    style={{ width: '100%', padding: '0.4rem', marginTop: 'auto' }}
+                    style={{ width: '100%', padding: '0.4rem', marginTop: 'auto', opacity: p.remaining <= 0 ? 0.5 : 1, cursor: p.remaining <= 0 ? 'not-allowed' : 'pointer' }}
                     onClick={() => addToCart(p)}
+                    disabled={p.remaining <= 0}
                   >
-                    <Plus size={14} style={{ display: 'inline', marginRight: '4px' }} /> ใส่ตะกร้า
+                    {p.remaining <= 0 ? 'Sold Out' : <><Plus size={14} style={{ display: 'inline', marginRight: '4px' }} /> ใส่ตะกร้า</>}
                   </button>
                 </div>
               );

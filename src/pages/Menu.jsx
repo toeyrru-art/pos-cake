@@ -44,6 +44,11 @@ export default function Menu() {
       });
     }
 
+    if (!fDate) {
+      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+      fDate = new Date(Date.now() - tzoffset).toISOString().split('T')[0];
+    }
+
     let preorderQuery = supabase.from('preorder_items')
       .select('product_id, quantity, preorders!inner(status, pickup_date)');
 
@@ -56,15 +61,27 @@ export default function Menu() {
       preorderQuery = preorderQuery.in('preorders.status', ['pending', 'accepted']);
     }
 
-    const [prodRes, preRes] = await Promise.all([
+    const saleQuery = supabase.from('sale_items')
+      .select('product_id, quantity, created_at')
+      .gte('created_at', `${fDate}T00:00:00`)
+      .lt('created_at', `${fDate}T23:59:59.999Z`);
+
+    const [prodRes, preRes, saleRes] = await Promise.all([
       supabase.from('products').select('*').order('created_at', { ascending: false }),
-      preorderQuery
+      preorderQuery,
+      saleQuery
     ]);
 
     const activePreorders = preRes.data;
+    const activeSales = saleRes.data;
     const reservedCounts = {};
     if (activePreorders) {
       activePreorders.forEach(item => {
+        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
+      });
+    }
+    if (activeSales) {
+      activeSales.forEach(item => {
         reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
       });
     }
