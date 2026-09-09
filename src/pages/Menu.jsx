@@ -29,12 +29,58 @@ export default function Menu() {
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: prodData } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false });
 
-    if (prodData) setProducts(prodData);
+    const { data: settingsData } = await supabase
+      .from('store_settings')
+      .select('key, value')
+      .in('key', ['pickup_date_mode', 'fixed_pickup_date']);
+
+    let pMode = 'customer';
+    let fDate = '';
+    if (settingsData) {
+      settingsData.forEach(setting => {
+        if (setting.key === 'pickup_date_mode') pMode = setting.value;
+        if (setting.key === 'fixed_pickup_date') fDate = setting.value;
+      });
+    }
+
+    let preorderQuery = supabase.from('preorder_items')
+      .select('product_id, quantity, preorders!inner(status, pickup_date)');
+
+    if (pMode === 'fixed' && fDate) {
+      preorderQuery = preorderQuery
+        .in('preorders.status', ['pending', 'accepted', 'completed'])
+        .gte('preorders.pickup_date', `${fDate}`)
+        .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
+    } else {
+      preorderQuery = preorderQuery.in('preorders.status', ['pending', 'accepted']);
+    }
+
+    const [prodRes, preRes] = await Promise.all([
+      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      preorderQuery
+    ]);
+
+    const activePreorders = preRes.data;
+    const reservedCounts = {};
+    if (activePreorders) {
+      activePreorders.forEach(item => {
+        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
+      });
+    }
+
+    if (prodRes.data) {
+      const productsWithLimits = prodRes.data.map(p => {
+        if (p.preorder_limit === null || p.preorder_limit === undefined) {
+          return { ...p, remaining: Infinity };
+        }
+        const reserved = reservedCounts[p.id] || 0;
+        const remaining = Math.max(0, p.preorder_limit - reserved);
+        return { ...p, remaining };
+      });
+      setProducts(productsWithLimits);
+    }
+
     setLoading(false);
   };
 
@@ -390,7 +436,9 @@ export default function Menu() {
                         <td style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{sellingPrice.toFixed(2)}</td>
                         <td>
                           {item.preorder_limit ? (
-                            <span style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>{item.preorder_limit} ชิ้น</span>
+                            <span style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>
+                              เหลือ {item.remaining} / {item.preorder_limit}
+                            </span>
                           ) : (
                             <span className="text-muted">ไม่อั้น</span>
                           )}
