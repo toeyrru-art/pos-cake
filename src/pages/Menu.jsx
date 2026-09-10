@@ -29,69 +29,14 @@ export default function Menu() {
 
   const fetchData = async () => {
     setLoading(true);
+    const { data } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    const { data: settingsData } = await supabase
-      .from('store_settings')
-      .select('key, value')
-      .in('key', ['pickup_date_mode', 'fixed_pickup_date']);
-
-    let pMode = 'customer';
-    let fDate = '';
-    if (settingsData) {
-      settingsData.forEach(setting => {
-        if (setting.key === 'pickup_date_mode') pMode = setting.value;
-        if (setting.key === 'fixed_pickup_date') fDate = setting.value;
-      });
+    if (data) {
+      setProducts(data);
     }
-
-    if (!fDate) {
-      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-      fDate = new Date(Date.now() - tzoffset).toISOString().split('T')[0];
-    }
-
-    let preorderQuery = supabase.from('preorder_items')
-      .select('product_id, quantity, preorders!inner(status, pickup_date)')
-      .in('preorders.status', ['pending', 'accepted', 'completed'])
-      .gte('preorders.pickup_date', `${fDate}`)
-      .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
-
-    const saleQuery = supabase.from('sale_items')
-      .select('product_id, quantity, created_at')
-      .gte('created_at', `${fDate}T00:00:00`)
-      .lt('created_at', `${fDate}T23:59:59.999Z`);
-
-    const [prodRes, preRes, saleRes] = await Promise.all([
-      supabase.from('products').select('*').order('created_at', { ascending: false }),
-      preorderQuery,
-      saleQuery
-    ]);
-
-    const activePreorders = preRes.data;
-    const activeSales = saleRes.data;
-    const reservedCounts = {};
-    if (activePreorders) {
-      activePreorders.forEach(item => {
-        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
-      });
-    }
-    if (activeSales) {
-      activeSales.forEach(item => {
-        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
-      });
-    }
-
-    if (prodRes.data) {
-      const productsWithLimits = prodRes.data.map(p => {
-        if (p.preorder_limit === null || p.preorder_limit === undefined) {
-          return { ...p, remaining: Infinity };
-        }
-        const reserved = reservedCounts[p.id] || 0;
-        const remaining = Math.max(0, p.preorder_limit - reserved);
-        return { ...p, remaining };
-      });
-      setProducts(productsWithLimits);
-    }
-
     setLoading(false);
   };
 
@@ -314,17 +259,18 @@ export default function Menu() {
                 </div>
                 
                 <div className="form-group">
-                  <label className="form-label">จำกัดพรีออร์เดอร์ (ชิ้น)</label>
+                  <label className="form-label">จำนวนสินค้าในคลัง / เปิดขาย (ชิ้น)</label>
                   <input 
                     type="number" 
-                    min="1" 
+                    min="0" 
                     step="1" 
                     name="preorder_limit" 
-                    value={formData.preorder_limit || ''} 
+                    value={formData.preorder_limit !== null && formData.preorder_limit !== undefined ? formData.preorder_limit : ''} 
                     onChange={handleInputChange} 
                     className="form-control premium-input" 
-                    placeholder="เว้นว่าง = ไม่อั้น" 
+                    placeholder="เช่น 10 (เว้นว่าง = ไม่อั้น)" 
                   />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>* มีลูกค้าสั่งหรือขายหน้าร้าน ระบบจะตัดสต็อกลดลงจากจำนวนนี้โดยตรง</span>
                 </div>
 
                 <div className="form-group">
@@ -404,7 +350,7 @@ export default function Menu() {
                   <th>ชื่อเมนู</th>
                   <th>รสชาติ/หน้าเค้ก</th>
                   <th>ราคาขาย</th>
-                  <th>จำกัดพรีออร์เดอร์</th>
+                  <th>จำนวนเปิดขาย (คงเหลือ)</th>
                   <th>สถานะพรีออร์เดอร์</th>
                   <th>จัดการ</th>
                 </tr>
@@ -446,10 +392,16 @@ export default function Menu() {
                         </td>
                         <td style={{ color: 'var(--primary-dark)', fontWeight: 'bold' }}>฿{sellingPrice.toFixed(2)}</td>
                         <td>
-                          {item.preorder_limit ? (
-                            <span style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>
-                              เหลือ {item.remaining} / {item.preorder_limit}
-                            </span>
+                          {item.preorder_limit !== null && item.preorder_limit !== undefined ? (
+                            item.preorder_limit > 0 ? (
+                              <span style={{ fontWeight: 'bold', color: 'var(--primary-dark)' }}>
+                                เหลือ {item.preorder_limit} ชิ้น
+                              </span>
+                            ) : (
+                              <span style={{ fontWeight: 'bold', color: 'var(--danger)' }}>
+                                หมดสต็อก (0 ชิ้น)
+                              </span>
+                            )
                           ) : (
                             <span className="text-muted">ไม่อั้น</span>
                           )}

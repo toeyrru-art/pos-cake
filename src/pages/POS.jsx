@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
+import { deductStock, restoreStock } from '../lib/stock';
 import { ShoppingCart, Plus, Minus, Trash2, History, X, Edit } from 'lucide-react';
 
 export default function POS() {
@@ -32,71 +33,13 @@ export default function POS() {
 
   const fetchData = async () => {
     setLoading(true);
-
-    const { data: settingsData } = await supabase
-      .from('store_settings')
-      .select('key, value')
-      .in('key', ['pickup_date_mode', 'fixed_pickup_date']);
-
-    let pMode = 'customer';
-    let fDate = '';
-    if (settingsData) {
-      settingsData.forEach(setting => {
-        if (setting.key === 'pickup_date_mode') pMode = setting.value;
-        if (setting.key === 'fixed_pickup_date') fDate = setting.value;
-      });
-    }
-
-    // Default to today if not fixed
-    if (!fDate) {
-      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-      fDate = new Date(Date.now() - tzoffset).toISOString().split('T')[0];
-    }
-
-    let preorderQuery = supabase.from('preorder_items')
-      .select('product_id, quantity, preorders!inner(status, pickup_date)')
-      .in('preorders.status', ['pending', 'accepted', 'completed'])
-      .gte('preorders.pickup_date', `${fDate}`)
-      .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
-
-    const saleQuery = supabase.from('sale_items')
-      .select('product_id, quantity, created_at')
-      .gte('created_at', `${fDate}T00:00:00`)
-      .lt('created_at', `${fDate}T23:59:59.999Z`);
-
-    const [prodRes, promoRes, preRes, saleRes] = await Promise.all([
+    const [prodRes, promoRes] = await Promise.all([
       supabase.from('products').select('*').order('name'),
-      supabase.from('product_promotions').select('*').eq('is_active', true),
-      preorderQuery,
-      saleQuery
+      supabase.from('product_promotions').select('*').eq('is_active', true)
     ]);
     
+    if (prodRes.data) setProducts(prodRes.data);
     if (promoRes.data) setProductPromotions(promoRes.data);
-
-    const reservedCounts = {};
-    if (preRes.data) {
-      preRes.data.forEach(item => {
-        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
-      });
-    }
-    if (saleRes.data) {
-      saleRes.data.forEach(item => {
-        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
-      });
-    }
-
-    if (prodRes.data) {
-      const productsWithLimits = prodRes.data.map(p => {
-        if (p.preorder_limit === null || p.preorder_limit === undefined) {
-          return { ...p, remaining: Infinity };
-        }
-        const reserved = reservedCounts[p.id] || 0;
-        const remaining = Math.max(0, p.preorder_limit - reserved);
-        return { ...p, remaining };
-      });
-      setProducts(productsWithLimits);
-    }
-
     setLoading(false);
   };
 
@@ -111,8 +54,9 @@ export default function POS() {
       .filter(item => item.product.id === product.id)
       .reduce((sum, item) => sum + item.quantity, 0);
 
-    if (currentTotalQ >= product.remaining) {
-      alert(`ขออภัย สินค้านี้สั่งได้สูงสุด ${product.remaining} ชิ้นครับ`);
+    const limit = product.preorder_limit !== null && product.preorder_limit !== undefined ? product.preorder_limit : Infinity;
+    if (currentTotalQ >= limit) {
+      alert(`ขออภัย สินค้านี้มีในคลังเพียง ${limit} ชิ้นครับ`);
       return;
     }
 
@@ -135,8 +79,9 @@ export default function POS() {
           const currentTotalQ = cart
             .filter(c => c.product.id === productId)
             .reduce((sum, c) => sum + c.quantity, 0);
-          if (currentTotalQ >= item.product.remaining) {
-            alert(`ขออภัย สินค้านี้สั่งได้สูงสุด ${item.product.remaining} ชิ้นครับ`);
+          const limit = item.product.preorder_limit !== null && item.product.preorder_limit !== undefined ? item.product.preorder_limit : Infinity;
+          if (currentTotalQ >= limit) {
+            alert(`ขออภัย สินค้านี้มีในคลังเพียง ${limit} ชิ้นครับ`);
             return item;
           }
         }
@@ -187,13 +132,18 @@ export default function POS() {
   };
 
   const cancelSale = async (saleId) => {
-    if (!confirm('คุณต้องการยกเลิกบิลนี้ใช่หรือไม่?\n\nข้อมูลบิลและรายรับจะถูกลบทิ้ง')) return;
+    if (!confirm('คุณต้องการยกเลิกบิลนี้ใช่หรือไม่?\n\nข้อมูลบิลและรายรับจะถูกลบทิ้ง และสินค้าจะถูกคืนเข้าสต็อก')) return;
     try {
+      const { data: items } = await supabase.from('sale_items').select('product_id, quantity').eq('sale_id', saleId);
+      if (items && items.length > 0) {
+        await restoreStock(items);
+      }
       await supabase.from('sale_items').delete().eq('sale_id', saleId);
       await supabase.from('transactions').delete().eq('reference_id', saleId);
       await supabase.from('sales').delete().eq('id', saleId);
-      alert('ยกเลิกบิลเรียบร้อยแล้ว');
+      alert('ยกเลิกบิลและคืนสต็อกเรียบร้อยแล้ว');
       fetchHistory();
+      fetchData();
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการยกเลิกบิล: ' + err.message);
     }
@@ -211,12 +161,16 @@ export default function POS() {
     setCart(newCart);
     
     try {
+      if (sale.sale_items && sale.sale_items.length > 0) {
+        await restoreStock(sale.sale_items);
+      }
       await supabase.from('sale_items').delete().eq('sale_id', sale.id);
       await supabase.from('transactions').delete().eq('reference_id', sale.id);
       await supabase.from('sales').delete().eq('id', sale.id);
       
       setIsHistoryOpen(false);
       alert('ดึงรายการมาไว้ในตะกร้าเรียบร้อยแล้ว กรุณาแก้ไขและกดยืนยันการขายใหม่อีกครั้ง');
+      fetchData();
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการแก้ไขบิล: ' + err.message);
     }
@@ -285,7 +239,13 @@ export default function POS() {
         reference_id: saleId
       }]);
 
-      alert('ทำรายการขายสำเร็จ!');
+      // 4. Deduct Stock directly from products table
+      await deductStock(cart.map(item => ({
+        productId: item.product.id,
+        quantity: item.quantity
+      })));
+
+      alert('ทำรายการขายสำเร็จ และตัดยอดสต็อกเรียบร้อย!');
       setCart([]);
       fetchData();
 
@@ -411,9 +371,9 @@ export default function POS() {
                     <div style={{ color: 'var(--primary-dark)', fontWeight: 'bold', marginBottom: '0.25rem' }}>
                       ฿{(p.selling_price + getFlavorPriceAddOn(currentFlavor)).toFixed(2)}
                     </div>
-                    {p.remaining !== Infinity && (
-                      <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: p.remaining > 0 ? 'var(--text-muted)' : 'var(--danger)', fontWeight: p.remaining <= 0 ? 'bold' : 'normal' }}>
-                        {p.remaining > 0 ? `เหลืออีก ${p.remaining} ชิ้น` : 'สินค้าหมดโควต้า'}
+                    {p.preorder_limit !== null && p.preorder_limit !== undefined && (
+                      <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: p.preorder_limit > 0 ? 'var(--text-muted)' : 'var(--danger)', fontWeight: p.preorder_limit <= 0 ? 'bold' : 'normal' }}>
+                        {p.preorder_limit > 0 ? `เหลืออีก ${p.preorder_limit} ชิ้น` : 'สินค้าหมด'}
                       </div>
                     )}
 
@@ -455,11 +415,17 @@ export default function POS() {
                   
                   <button 
                     className="btn btn-outline" 
-                    style={{ width: '100%', padding: '0.4rem', marginTop: 'auto', opacity: p.remaining <= 0 ? 0.5 : 1, cursor: p.remaining <= 0 ? 'not-allowed' : 'pointer' }}
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.4rem', 
+                      marginTop: 'auto', 
+                      opacity: (p.preorder_limit !== null && p.preorder_limit <= 0) ? 0.5 : 1, 
+                      cursor: (p.preorder_limit !== null && p.preorder_limit <= 0) ? 'not-allowed' : 'pointer' 
+                    }}
                     onClick={() => addToCart(p)}
-                    disabled={p.remaining <= 0}
+                    disabled={p.preorder_limit !== null && p.preorder_limit <= 0}
                   >
-                    {p.remaining <= 0 ? 'Sold Out' : <><Plus size={14} style={{ display: 'inline', marginRight: '4px' }} /> ใส่ตะกร้า</>}
+                    {(p.preorder_limit !== null && p.preorder_limit <= 0) ? 'หมดสต็อก' : <><Plus size={14} style={{ display: 'inline', marginRight: '4px' }} /> ใส่ตะกร้า</>}
                   </button>
                 </div>
               );

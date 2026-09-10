@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
+import { deductStock } from '../lib/stock';
 import { ShoppingBag, Plus, Minus, Trash2, Calendar, Phone, User, Cake, UploadCloud, CreditCard, Award, Gift, Check, Ticket, X } from 'lucide-react';
 
 export default function CustomerShop() {
@@ -117,71 +118,20 @@ export default function CustomerShop() {
   const fetchData = async () => {
     setLoading(true);
 
-    const { data: settingsData } = await supabase
-      .from('store_settings')
-      .select('key, value')
-      .in('key', ['pickup_date_mode', 'fixed_pickup_date']);
-
-    let pMode = 'customer';
-    let fDate = '';
-    if (settingsData) {
-      settingsData.forEach(setting => {
-        if (setting.key === 'pickup_date_mode') pMode = setting.value;
-        if (setting.key === 'fixed_pickup_date') fDate = setting.value;
-      });
-    }
-
-    if (!fDate) {
-      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-      fDate = new Date(Date.now() - tzoffset).toISOString().split('T')[0];
-    }
-
-    let preorderQuery = supabase.from('preorder_items')
-      .select('product_id, quantity, preorders!inner(status, pickup_date)')
-      .in('preorders.status', ['pending', 'accepted', 'completed'])
-      .gte('preorders.pickup_date', `${fDate}`)
-      .lt('preorders.pickup_date', `${fDate}T23:59:59.999Z`);
-
-    const saleQuery = supabase.from('sale_items')
-      .select('product_id, quantity, created_at')
-      .gte('created_at', `${fDate}T00:00:00`)
-      .lt('created_at', `${fDate}T23:59:59.999Z`);
-
-    const [prodRes, promoRes, preRes, saleRes] = await Promise.all([
+    const [prodRes, promoRes] = await Promise.all([
       supabase.from('products').select('*').order('name'),
-      supabase.from('product_promotions').select('*').eq('is_active', true),
-      preorderQuery,
-      saleQuery
+      supabase.from('product_promotions').select('*').eq('is_active', true)
     ]);
 
-    const activePreorders = preRes.data;
-    const activeSales = saleRes.data;
-    
     if (promoRes.data) {
       setProductPromotions(promoRes.data);
     }
 
-    const reservedCounts = {};
-    if (activePreorders) {
-      activePreorders.forEach(item => {
-        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
-      });
-    }
-    if (activeSales) {
-      activeSales.forEach(item => {
-        reservedCounts[item.product_id] = (reservedCounts[item.product_id] || 0) + item.quantity;
-      });
-    }
-
     if (prodRes.data) {
-      const productsWithLimits = prodRes.data.map(p => {
-        if (p.preorder_limit === null || p.preorder_limit === undefined) {
-          return { ...p, remaining: Infinity };
-        }
-        const reserved = reservedCounts[p.id] || 0;
-        const remaining = Math.max(0, p.preorder_limit - reserved);
-        return { ...p, remaining };
-      });
+      const productsWithLimits = prodRes.data.map(p => ({
+        ...p,
+        remaining: p.preorder_limit !== null && p.preorder_limit !== undefined ? p.preorder_limit : Infinity
+      }));
       setProducts(productsWithLimits);
     }
     setLoading(false);
@@ -580,6 +530,12 @@ export default function CustomerShop() {
       } else if (itemsRes.error) {
         throw itemsRes.error;
       }
+
+      // Deduct stock directly from products table
+      await deductStock(cart.map(item => ({
+        productId: item.product.id,
+        quantity: item.quantity
+      })));
 
       await sendSlackNotification(
         {

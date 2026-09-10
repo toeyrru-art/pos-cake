@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
+import { deductStock, restoreStock } from '../lib/stock';
 import { Clock, CheckCircle, PackageCheck, XCircle, ChevronDown, ChevronUp, Trash2, Image as ImageIcon, CreditCard, Plus, User, Phone, Calendar, X, UploadCloud, MessageSquare, Sparkles, Printer, Cake } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
@@ -251,6 +252,15 @@ export default function Preorders() {
         alert(error.message);
       }
     } else {
+      if (newStatus === 'cancelled' && order.status !== 'cancelled') {
+        if (order.preorder_items && order.preorder_items.length > 0) {
+          await restoreStock(order.preorder_items);
+        }
+      } else if (order.status === 'cancelled' && newStatus !== 'cancelled') {
+        if (order.preorder_items && order.preorder_items.length > 0) {
+          await deductStock(order.preorder_items);
+        }
+      }
       // Send Slack notification for status change
       try {
         const { data: slackTokenData } = await supabase
@@ -412,6 +422,10 @@ export default function Preorders() {
   const deletePreorder = async (order) => {
     if (window.confirm(`ต้องการลบออร์เดอร์ของ คุณ${order.customer_name} ใช่หรือไม่?`)) {
       sendSlackCancelNotification(order);
+
+      if (order.status !== 'cancelled' && order.preorder_items && order.preorder_items.length > 0) {
+        await restoreStock(order.preorder_items);
+      }
 
       const { error } = await supabase
         .from('preorders')
@@ -721,6 +735,14 @@ export default function Preorders() {
         itemRes = await supabase.from('preorder_items').insert(cleanPayload);
       }
       if (itemRes.error) throw itemRes.error;
+
+      // Deduct stock directly for new orders
+      if (!editingOrderId) {
+        await deductStock(orderItems.map(i => ({
+          productId: i.product.id,
+          quantity: i.quantity
+        })));
+      }
 
       // 3. Credit Member Points automatically if phone provided
       if (finalPhone !== '-') {
