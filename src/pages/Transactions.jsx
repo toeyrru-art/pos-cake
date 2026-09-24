@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { TrendingUp, TrendingDown, DollarSign, Plus, Camera, Loader2, X, UploadCloud, Clipboard } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Plus, Camera, Loader2, X, UploadCloud, Clipboard, Calendar } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default function Transactions() {
@@ -15,8 +15,9 @@ export default function Transactions() {
   const [scanImageFile, setScanImageFile] = useState(null);
   const [scanImagePreview, setScanImagePreview] = useState(null);
 
-  // Filter state
-  const [filterDate, setFilterDate] = useState('');
+  // Filter state (Date Range)
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   
   // Summary state
   const [summary, setSummary] = useState({ income: 0, expense: 0, net: 0 });
@@ -154,7 +155,7 @@ export default function Transactions() {
 
   useEffect(() => {
     fetchData();
-  }, [filterDate]);
+  }, [filterStartDate, filterEndDate]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -164,16 +165,16 @@ export default function Transactions() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (filterDate) {
-      const startOfDay = new Date(filterDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      
-      const endOfDay = new Date(filterDate);
-      endOfDay.setHours(23, 59, 59, 999);
+    if (filterStartDate) {
+      const [y, m, d] = filterStartDate.split('-').map(Number);
+      const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+      query = query.gte('created_at', startOfDay.toISOString());
+    }
 
-      query = query
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString());
+    if (filterEndDate) {
+      const [y, m, d] = filterEndDate.split('-').map(Number);
+      const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
+      query = query.lte('created_at', endOfDay.toISOString());
     }
 
     const { data, error } = await query;
@@ -430,22 +431,41 @@ export default function Transactions() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
           <h4 style={{ margin: 0, fontWeight: 'bold' }}>ประวัติรายการ</h4>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>กรองตามวันที่:</label>
-            <input 
-              type="date" 
-              className="form-control premium-input"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              style={{ width: 'auto', padding: '0.35rem 0.75rem' }}
-            />
-            {filterDate && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 500 }}>
+              <Calendar size={16} /> กรองช่วงวันที่:
+            </span>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              backgroundColor: '#fff', 
+              border: '1px solid var(--border)', 
+              borderRadius: '10px', 
+              padding: '0.2rem 0.5rem',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+            }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}>จาก</span>
+              <input 
+                type="date" 
+                value={filterStartDate}
+                onChange={(e) => setFilterStartDate(e.target.value)}
+                style={{ border: 'none', backgroundColor: 'transparent', outline: 'none', padding: '0.35rem 0.25rem', fontSize: '0.85rem', color: 'var(--primary-dark)', cursor: 'pointer' }}
+              />
+              <span style={{ color: 'var(--text-muted)', margin: '0 0.35rem', fontSize: '0.85rem' }}>ถึง</span>
+              <input 
+                type="date" 
+                value={filterEndDate}
+                onChange={(e) => setFilterEndDate(e.target.value)}
+                style={{ border: 'none', backgroundColor: 'transparent', outline: 'none', padding: '0.35rem 0.25rem', fontSize: '0.85rem', color: 'var(--primary-dark)', cursor: 'pointer' }}
+              />
+            </div>
+            {(filterStartDate || filterEndDate) && (
               <button 
                 className="btn btn-outline" 
-                onClick={() => setFilterDate('')}
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', borderRadius: '8px' }}
               >
-                ล้าง
+                ล้างตัวกรอง
               </button>
             )}
           </div>
