@@ -594,8 +594,13 @@ export default function BakingCalendar() {
               type="date" 
               value={selectedDateStr} 
               onChange={e => {
-                setSelectedDateStr(e.target.value);
-                if (e.target.value > endDateStr) setEndDateStr(e.target.value);
+                const val = e.target.value;
+                setSelectedDateStr(val);
+                if (val > endDateStr) setEndDateStr(val);
+                if (val) {
+                  const [y, m, d] = val.split('-').map(Number);
+                  setCurrentDate(new Date(y, m - 1, d || 1));
+                }
               }}
               style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-dark)', cursor: 'pointer' }}
             />
@@ -604,8 +609,15 @@ export default function BakingCalendar() {
               type="date" 
               value={endDateStr} 
               onChange={e => {
-                setEndDateStr(e.target.value);
-                if (e.target.value < selectedDateStr) setSelectedDateStr(e.target.value);
+                const val = e.target.value;
+                setEndDateStr(val);
+                if (val < selectedDateStr) {
+                  setSelectedDateStr(val);
+                  if (val) {
+                    const [y, m, d] = val.split('-').map(Number);
+                    setCurrentDate(new Date(y, m - 1, d || 1));
+                  }
+                }
               }}
               style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-dark)', cursor: 'pointer' }}
             />
