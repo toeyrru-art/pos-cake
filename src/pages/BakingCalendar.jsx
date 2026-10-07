@@ -30,6 +30,13 @@ export default function BakingCalendar() {
     const dd = String(today.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   });
+  const [endDateStr, setEndDateStr] = useState(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
 
   const [preorders, setPreorders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -187,6 +194,155 @@ export default function BakingCalendar() {
     }, 500);
   };
 
+  const printCalendarMonth = () => {
+    let iframe = document.getElementById('print-calendar-iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-calendar-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+
+    const monthName = monthNamesThai[month];
+    const yearTh = year + 543;
+
+    // Build the grid
+    let gridHtml = `
+      <div class="calendar-grid">
+        <div class="day-header text-red">อาทิตย์</div>
+        <div class="day-header">จันทร์</div>
+        <div class="day-header">อังคาร</div>
+        <div class="day-header">พุธ</div>
+        <div class="day-header">พฤหัสบดี</div>
+        <div class="day-header">ศุกร์</div>
+        <div class="day-header text-primary">เสาร์</div>
+    `;
+
+    prevMonthDays.forEach(d => {
+      gridHtml += `<div class="day-cell prev-month"><span class="day-num">${d}</span></div>`;
+    });
+
+    daysInMonth.forEach(d => {
+      const dateStr = formatDateString(year, month, d);
+      const dayData = preordersByDate[dateStr];
+      let contentHtml = '';
+      if (dayData && dayData.totalItems > 0) {
+        contentHtml = `<div class="day-info">
+          <div style="font-weight:bold;">🎂 อบ: ${dayData.totalItems} ชิ้น</div>
+          ${dayData.pendingCount > 0 ? `<div>⏳ รอ: ${dayData.pendingCount}</div>` : ''}
+          ${dayData.preparedCount > 0 ? `<div>🎁 จัด: ${dayData.preparedCount}</div>` : ''}
+          ${dayData.completedCount > 0 ? `<div>✅ รับ: ${dayData.completedCount}</div>` : ''}
+        </div>`;
+      }
+      
+      gridHtml += `
+        <div class="day-cell">
+          <span class="day-num">${d}</span>
+          ${contentHtml}
+        </div>
+      `;
+    });
+
+    const totalCells = prevMonthDays.length + daysInMonth.length;
+    const remainingCells = (7 - (totalCells % 7)) % 7;
+    for (let i = 1; i <= remainingCells; i++) {
+      gridHtml += `<div class="day-cell next-month"><span class="day-num">${i}</span></div>`;
+    }
+
+    gridHtml += `</div>`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>พิมพ์ปฏิทิน</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
+          }
+          body {
+            font-family: 'Kanit', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          h1 {
+            text-align: center;
+            font-size: 22px;
+            margin: 0 0 10px 0;
+            color: #000;
+          }
+          .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            border-top: 1px solid #000;
+            border-left: 1px solid #000;
+            height: calc(100vh - 60px); /* fill A4 page height mostly */
+          }
+          .day-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 5px 0;
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            background: #f8f9fa;
+            font-size: 14px;
+            height: 30px;
+            box-sizing: border-box;
+          }
+          .text-red { color: #d63031; }
+          .text-primary { color: #0984e3; }
+          .day-cell {
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            padding: 5px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+          }
+          .prev-month, .next-month {
+            background: #f1f2f6;
+            color: #a4b0be;
+          }
+          .day-num {
+            font-weight: bold;
+            font-size: 16px;
+            display: block;
+            margin-bottom: 2px;
+          }
+          .day-info {
+            font-size: 11px;
+            color: #2d3436;
+            line-height: 1.4;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>ปฏิทินสั่งทำขนม เดือน ${monthName} ${yearTh}</h1>
+        ${gridHtml}
+      </body>
+      </html>
+    `;
+
+    iframe.contentWindow.document.open();
+    iframe.contentWindow.document.write(html);
+    iframe.contentWindow.document.close();
+
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 500);
+  };
+
 
   // Helper for Calendar Days calculation
   const year = currentDate.getFullYear();
@@ -222,7 +378,9 @@ export default function BakingCalendar() {
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    setSelectedDateStr(`${yyyy}-${mm}-${dd}`);
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    setSelectedDateStr(todayStr);
+    setEndDateStr(todayStr);
   };
 
   // Format YYYY-MM-DD helper
@@ -303,8 +461,33 @@ export default function BakingCalendar() {
     return sum;
   }, 0);
 
-  // Selected date preorders & aggregated baking summary
-  const selectedDateOrders = preordersByDate[selectedDateStr]?.orders || [];
+  // Selected date range preorders & aggregated baking summary
+  const selectedDateOrders = [];
+  const selectedRangeStats = {
+    totalRevenue: 0,
+    payLaterRevenue: 0,
+    paidRevenue: 0,
+  };
+
+  if (selectedDateStr && endDateStr) {
+    let curr = new Date(selectedDateStr);
+    const end = new Date(endDateStr);
+    
+    // Prevent infinite loops if end < start
+    if (curr <= end) {
+      while (curr <= end) {
+        const dKey = getLocalDateKey(curr);
+        const dData = preordersByDate[dKey];
+        if (dData) {
+          selectedDateOrders.push(...dData.orders);
+          selectedRangeStats.totalRevenue += dData.totalRevenue;
+          selectedRangeStats.payLaterRevenue += dData.payLaterRevenue;
+          selectedRangeStats.paidRevenue += dData.paidRevenue;
+        }
+        curr.setDate(curr.getDate() + 1);
+      }
+    }
+  }
 
   // Aggregate baking count by (product_name + flavor)
   const bakingSummaryMap = {};
@@ -332,9 +515,13 @@ export default function BakingCalendar() {
   ];
 
   const thaiFormattedSelectedDate = () => {
-    if (!selectedDateStr) return '';
-    const [y, m, d] = selectedDateStr.split('-').map(Number);
-    return `${d} ${monthNamesThai[m - 1]} ${y + 543}`;
+    if (!selectedDateStr || !endDateStr) return '';
+    const [y1, m1, d1] = selectedDateStr.split('-').map(Number);
+    const [y2, m2, d2] = endDateStr.split('-').map(Number);
+    const sStr = `${d1} ${monthNamesThai[m1 - 1]} ${y1 + 543}`;
+    const eStr = `${d2} ${monthNamesThai[m2 - 1]} ${y2 + 543}`;
+    if (selectedDateStr === endDateStr) return sStr;
+    return `${sStr} - ${eStr}`;
   };
 
   return (
@@ -353,6 +540,30 @@ export default function BakingCalendar() {
 
         {/* Filter & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', padding: '0.4rem 0.75rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+            <CalendarIcon size={16} color="var(--primary)" />
+            <input 
+              type="date" 
+              value={selectedDateStr} 
+              onChange={e => {
+                setSelectedDateStr(e.target.value);
+                if (e.target.value > endDateStr) setEndDateStr(e.target.value);
+              }}
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-dark)', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>ถึง</span>
+            <input 
+              type="date" 
+              value={endDateStr} 
+              onChange={e => {
+                setEndDateStr(e.target.value);
+                if (e.target.value < selectedDateStr) setSelectedDateStr(e.target.value);
+              }}
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-dark)', cursor: 'pointer' }}
+            />
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', padding: '0.4rem 0.75rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
             <Filter size={16} color="var(--primary)" />
             <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>กรองสถานะ:</span>
@@ -376,6 +587,15 @@ export default function BakingCalendar() {
           >
             <Sparkles size={16} color="var(--primary)" />
             วันนี้
+          </button>
+          
+          <button 
+            className="btn btn-primary" 
+            onClick={printCalendarMonth}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '10px' }}
+          >
+            <Printer size={16} />
+            พิมพ์ปฏิทิน
           </button>
         </div>
       </div>
@@ -443,7 +663,7 @@ export default function BakingCalendar() {
             {daysInMonth.map(d => {
               const dateStr = formatDateString(year, month, d);
               const dayData = preordersByDate[dateStr];
-              const isSelected = dateStr === selectedDateStr;
+              const isSelected = dateStr >= selectedDateStr && dateStr <= endDateStr;
               
               const todayStr = formatDateString(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
               const isToday = dateStr === todayStr;
@@ -452,7 +672,10 @@ export default function BakingCalendar() {
                 <div
                   key={d}
                   className="calendar-day-cell"
-                  onClick={() => setSelectedDateStr(dateStr)}
+                  onClick={() => {
+                    setSelectedDateStr(dateStr);
+                    setEndDateStr(dateStr);
+                  }}
                   style={{
                     minHeight: '75px',
                     padding: '0.35rem',
@@ -549,7 +772,7 @@ export default function BakingCalendar() {
               <div style={{ background: 'white', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.3)', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>💰 ยอดรวมที่จะได้รับ</div>
                 <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#b45309', marginTop: '0.2rem' }}>
-                  ฿{(preordersByDate[selectedDateStr]?.totalRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  ฿{(selectedRangeStats.totalRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                 </div>
               </div>
 
@@ -557,7 +780,7 @@ export default function BakingCalendar() {
               <div style={{ background: 'white', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
                 <div style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 500 }}>💵 รอเก็บเงินสดตอนรับของ</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#dc2626', marginTop: '0.2rem' }}>
-                  ฿{(preordersByDate[selectedDateStr]?.payLaterRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  ฿{(selectedRangeStats.payLaterRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                 </div>
               </div>
 
@@ -565,7 +788,7 @@ export default function BakingCalendar() {
               <div style={{ background: 'white', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
                 <div style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 500 }}>💳 โอน/ชำระเงินแล้ว</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#059669', marginTop: '0.2rem' }}>
-                  ฿{(preordersByDate[selectedDateStr]?.paidRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  ฿{(selectedRangeStats.paidRevenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
