@@ -233,10 +233,10 @@ export default function BakingCalendar() {
       let contentHtml = '';
       if (dayData && dayData.totalItems > 0) {
         contentHtml = `<div class="day-info">
-          <div style="font-weight:bold;">🎂 อบ: ${dayData.totalItems} ชิ้น</div>
-          ${dayData.pendingCount > 0 ? `<div>⏳ รอ: ${dayData.pendingCount}</div>` : ''}
-          ${dayData.preparedCount > 0 ? `<div>🎁 จัด: ${dayData.preparedCount}</div>` : ''}
-          ${dayData.completedCount > 0 ? `<div>✅ รับ: ${dayData.completedCount}</div>` : ''}
+          <div class="badge badge-total">🎂 อบ: ${dayData.totalItems} ชิ้น</div>
+          ${dayData.pendingCount > 0 ? `<div class="badge badge-pending">⏳ รอ: ${dayData.pendingCount}</div>` : ''}
+          ${dayData.preparedCount > 0 ? `<div class="badge badge-prepared">🎁 จัด: ${dayData.preparedCount}</div>` : ''}
+          ${dayData.completedCount > 0 ? `<div class="badge badge-completed">✅ รับ: ${dayData.completedCount}</div>` : ''}
         </div>`;
       }
       
@@ -250,8 +250,10 @@ export default function BakingCalendar() {
 
     const totalCells = prevMonthDays.length + daysInMonth.length;
     const remainingCells = (7 - (totalCells % 7)) % 7;
-    for (let i = 1; i <= remainingCells; i++) {
-      gridHtml += `<div class="day-cell next-month"><span class="day-num">${i}</span></div>`;
+    if (remainingCells !== 7 && remainingCells !== 0) {
+      for (let i = 1; i <= remainingCells; i++) {
+        gridHtml += `<div class="day-cell next-month"><span class="day-num">${i}</span></div>`;
+      }
     }
 
     gridHtml += `</div>`;
@@ -262,7 +264,7 @@ export default function BakingCalendar() {
       <head>
         <title>พิมพ์ปฏิทิน</title>
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
           @page {
             size: A4 landscape;
             margin: 10mm;
@@ -274,64 +276,109 @@ export default function BakingCalendar() {
             color: #333;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            background: #fff;
+          }
+          .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            gap: 10px;
           }
           h1 {
             text-align: center;
-            font-size: 22px;
-            margin: 0 0 10px 0;
-            color: #000;
+            font-size: 24px;
+            margin: 0;
+            color: #5c3a21;
+            font-weight: 600;
+          }
+          .subtitle {
+            text-align: center;
+            font-size: 13px;
+            color: #7f8c8d;
+            margin-bottom: 15px;
           }
           .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            border-top: 1px solid #000;
-            border-left: 1px solid #000;
-            height: calc(100vh - 60px); /* fill A4 page height mostly */
+            border-top: 2px solid #d99a6c;
+            border-left: 1px solid #e0e0e0;
+            height: calc(100vh - 100px);
           }
           .day-header {
             text-align: center;
-            font-weight: bold;
-            padding: 5px 0;
-            border-right: 1px solid #000;
-            border-bottom: 1px solid #000;
-            background: #f8f9fa;
+            font-weight: 600;
+            padding: 8px 0;
+            border-right: 1px solid #e0e0e0;
+            border-bottom: 2px solid #d99a6c;
+            background: #fffaf5;
             font-size: 14px;
-            height: 30px;
+            color: #5c3a21;
             box-sizing: border-box;
           }
-          .text-red { color: #d63031; }
-          .text-primary { color: #0984e3; }
+          .text-red { color: #e74c3c !important; }
+          .text-primary { color: #2980b9 !important; }
           .day-cell {
-            border-right: 1px solid #000;
-            border-bottom: 1px solid #000;
-            padding: 5px;
+            border-right: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 8px;
             position: relative;
             display: flex;
             flex-direction: column;
+            background: #ffffff;
           }
           .prev-month, .next-month {
-            background: #f1f2f6;
-            color: #a4b0be;
+            background: #fdfdfd;
+          }
+          .prev-month .day-num, .next-month .day-num {
+            color: #dcdde1;
           }
           .day-num {
-            font-weight: bold;
-            font-size: 16px;
-            display: block;
-            margin-bottom: 2px;
+            font-weight: 600;
+            font-size: 18px;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            text-align: right;
+            padding-right: 4px;
           }
           .day-info {
-            font-size: 11px;
-            color: #2d3436;
-            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
           }
+          .badge {
+            display: block;
+            padding: 3px 6px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            width: 100%;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .badge-total { 
+            background: #fdf3eb; 
+            color: #b7713d; 
+            border: 1px solid #f6dfcd; 
+            font-weight: 600; 
+            font-size: 12px;
+          }
+          .badge-pending { background: #fff3cd; color: #856404; }
+          .badge-prepared { background: #e8f4f8; color: #0077b6; }
+          .badge-completed { background: #d4edda; color: #155724; }
         </style>
       </head>
       <body>
-        <h1>ปฏิทินสั่งทำขนม เดือน ${monthName} ${yearTh}</h1>
+        <div class="header-container">
+          <h1>📅 ปฏิทินวางแผนอบเค้ก</h1>
+        </div>
+        <div class="subtitle">ประจำเดือน ${monthName} ${yearTh} • บ้านทุ่ง เบเกอรี่</div>
         ${gridHtml}
       </body>
       </html>
-    `;
+    \`;
 
     iframe.contentWindow.document.open();
     iframe.contentWindow.document.write(html);
